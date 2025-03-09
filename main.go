@@ -33,7 +33,7 @@ const (
 func main() {
 	pw := progress.NewWriter()
 	pw.SetMessageLength(30)
-	pw.SetNumTrackersExpected(1)
+	pw.SetNumTrackersExpected(6)
 	pw.SetSortBy(progress.SortByPercentDsc)
 	pw.SetStyle(progress.StyleDefault)
 	pw.SetTrackerLength(15)
