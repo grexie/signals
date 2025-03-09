@@ -40,7 +40,7 @@ func main() {
 	pw.SetTrackerPosition(progress.PositionRight)
 	pw.SetUpdateFrequency(time.Millisecond * 100)
 	pw.Style().Colors = progress.StyleColorsExample
-	pw.Style().Options.PercentFormat = "%4.1f%%"
+	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
 
 	db, err := db.ConnectMongo()
