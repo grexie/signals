@@ -111,6 +111,7 @@ outer:
 			}
 		}
 		tracker.MarkAsDone()
+		pw.Stop()
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
