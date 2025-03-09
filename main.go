@@ -112,6 +112,9 @@ outer:
 		}
 		tracker.MarkAsDone()
 		pw.Stop()
+		for pw.IsRenderInProgress() {
+			time.Sleep(100 * time.Millisecond)
+		}
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
