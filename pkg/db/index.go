@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"reflect"
@@ -66,8 +65,6 @@ func ConnectMongo() (*mongo.Database, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	log.Println("Connecting to MongoDB at", mongoUrl)
 
 	if client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(mongoUrl).SetRegistry(registry)); err != nil {
 		return nil, err

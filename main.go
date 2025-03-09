@@ -32,11 +32,11 @@ const (
 
 func main() {
 	pw := progress.NewWriter()
-	pw.SetMessageLength(24)
+	pw.SetMessageLength(30)
 	pw.SetNumTrackersExpected(1)
 	pw.SetSortBy(progress.SortByPercentDsc)
 	pw.SetStyle(progress.StyleDefault)
-	pw.SetTrackerLength(25)
+	pw.SetTrackerLength(15)
 	pw.SetTrackerPosition(progress.PositionRight)
 	pw.SetUpdateFrequency(time.Millisecond * 100)
 	pw.Style().Colors = progress.StyleColorsExample
@@ -48,7 +48,7 @@ func main() {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 
-	ctx, ch := FetchMarketCandles(context.Background(), db, "DOGE-USDT-SWAP", time.Now().AddDate(0, -3, 0), time.Now(), CandleBar1m)
+	ctx, ch := FetchMarketCandles(context.Background(), pw, db, "DOGE-USDT-SWAP", time.Now().AddDate(0, -3, 0), time.Now(), CandleBar1m)
 
 	var candles []Candle
 outer:
@@ -221,7 +221,7 @@ func NewCandlesFromData(instrument string, data [][]string) ([]Candle, error) {
 	return out, nil
 }
 
-func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument string, start time.Time, end time.Time, bar CandleBar) (context.Context, chan Candle) {
+func FetchMarketCandles(ctx context.Context, pw progress.Writer, mdb *mongo.Database, instrument string, start time.Time, end time.Time, bar CandleBar) (context.Context, chan Candle) {
 	client := resty.New()
 	candles := 50
 	out := make(chan Candle, candles*100)
@@ -245,6 +245,28 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 			return
 		}
 
+		tracker := &progress.Tracker{
+			Message: "Fetching candles from cache",
+			Units:   progress.UnitsDefault,
+		}
+
+		if count, err := mdb.Collection("candles").CountDocuments(ctx, bson.M{
+			"instrument": instrument,
+			"network":    "okx",
+			"timestamp": bson.M{
+				"$gte": start,
+				"$lte": end,
+			},
+		}); err != nil {
+			log.Println("failed to count candles in database:", err)
+			cancel(err)
+			return
+		} else if count > 0 {
+			tracker.Total = count
+			pw.AppendTracker(tracker)
+			tracker.Start()
+		}
+
 		if cursor, err := mdb.Collection("candles").Find(ctx, bson.M{
 			"instrument": instrument,
 			"network":    "okx",
@@ -264,6 +286,7 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 					return
 				}
 
+				tracker.Increment(1)
 				start = candle.Timestamp
 
 				select {
@@ -273,8 +296,17 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 				}
 			}
 		}
+		tracker.MarkAsDone()
 
 		duration := time.Duration(candles) * CandleBarToDuration(bar)
+
+		tracker = &progress.Tracker{
+			Message: "Fetching candles from API",
+			Units:   progress.UnitsDefault,
+			Total:   int64((end.Sub(start) / duration) + 1),
+		}
+		pw.AppendTracker(tracker)
+		tracker.Start()
 
 		for ; start.Before(end); start = start.Add(duration) {
 			params := map[string]string{
@@ -284,8 +316,6 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 				"after":  fmt.Sprintf("%d", start.Add(duration).UnixMilli()),
 				"before": fmt.Sprintf("%d", start.UnixMilli()),
 			}
-
-			log.Printf("fetching candles from: %s to: %s", start, start.Add(duration))
 
 			requested := time.Now()
 
@@ -313,6 +343,7 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 					return
 				} else {
 					for _, candle := range candles {
+						tracker.Increment(1)
 						if _, err := mdb.Collection("candles").InsertOne(ctx, candle); err != nil {
 							cancel(err)
 							return
@@ -328,6 +359,8 @@ func FetchMarketCandles(ctx context.Context, mdb *mongo.Database, instrument str
 
 			time.Sleep(time.Until(requested.Add(200 * time.Millisecond)))
 		}
+
+		tracker.MarkAsDone()
 	}()
 
 	return ctx, out
@@ -466,7 +499,7 @@ type GorgoniaParams struct {
 
 func PrepareDataForGorgonia(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]float64, []float64) {
 	tracker := progress.Tracker{
-		Message: "Preparing Data",
+		Message: "Preparing data",
 		Total:   int64(len(candles)),
 		Units:   progress.UnitsDefault,
 	}
@@ -556,7 +589,7 @@ func PrepareDataForGorgonia(pw progress.Writer, candles []Candle, params Gorgoni
 
 func NormalizeData(pw progress.Writer, features [][]float64) [][]float64 {
 	tracker := progress.Tracker{
-		Message: "Normalizing Data",
+		Message: "Normalizing data",
 		Total:   int64(len(features[0]) * len(features)),
 		Units:   progress.UnitsDefault,
 	}
