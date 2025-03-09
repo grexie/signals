@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/grexie/signals/pkg/db"
+	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/progress"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,6 +31,18 @@ const (
 )
 
 func main() {
+	pw := progress.NewWriter()
+	pw.SetMessageLength(24)
+	pw.SetNumTrackersExpected(1)
+	pw.SetSortBy(progress.SortByPercentDsc)
+	pw.SetStyle(progress.StyleDefault)
+	pw.SetTrackerLength(25)
+	pw.SetTrackerPosition(progress.PositionRight)
+	pw.SetUpdateFrequency(time.Millisecond * 100)
+	pw.Style().Colors = progress.StyleColorsExample
+	pw.Style().Options.PercentFormat = "%4.1f%%"
+	go pw.Render()
+
 	db, err := db.ConnectMongo()
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
@@ -53,6 +68,7 @@ outer:
 	}
 
 	features, labels := PrepareDataForGorgonia(
+		pw,
 		candles,
 		GorgoniaParams{
 			WindowSize:    200,
@@ -68,17 +84,44 @@ outer:
 	testingFeatures := features[countTraining:]
 	testingLabels := labels[countTraining:]
 
-	if weights, err := BuildAndTrainNN(trainingFeatures, trainingLabels, 100); err != nil {
+	if weights, err := BuildAndTrainNN(pw, trainingFeatures, trainingLabels, 100); err != nil {
 		log.Fatalf("Training error: %v", err)
 	} else {
+		tracker := progress.Tracker{
+			Message: "Testing",
+			Total:   int64(len(testingFeatures)),
+			Units:   progress.UnitsDefault,
+		}
+		pw.AppendTracker(&tracker)
+		tracker.Start()
+
+		confusion := make([][]int, 3)
+		for i := range confusion {
+			confusion[i] = make([]int, 3)
+		}
 		for i := range len(testingFeatures) {
+			tracker.SetValue(int64(i))
 			if value, err := Predict(weights, testingFeatures[i]); err != nil {
 				log.Fatalf("Prediction error: %v", err)
 			} else {
 				predictedClass := argmax(value)
-				log.Printf("Prediction: %v, Actual: %v", predictedClass, int(testingLabels[i]))
+				actualClass := int(testingLabels[i])
+
+				confusion[predictedClass][actualClass]++
 			}
 		}
+		tracker.MarkAsDone()
+
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"", "HOLD", "SHORT", "LONG"})
+		t.AppendRows([]table.Row{
+			{"HOLD", confusion[0][0], confusion[0][1], confusion[0][2]},
+			{"SHORT", confusion[1][0], confusion[1][1], confusion[1][2]},
+			{"LONG", confusion[2][0], confusion[2][1], confusion[2][2]},
+		})
+		t.AppendFooter(table.Row{"ACCURACY", "", "", fmt.Sprintf("%0.02f%%", (100.0*float64(confusion[0][0]+confusion[1][1]+confusion[2][2]))/float64(len(testingFeatures)))})
+		t.Render()
 	}
 }
 
@@ -420,7 +463,15 @@ type GorgoniaParams struct {
 	StrategyHold  float64
 }
 
-func PrepareDataForGorgonia(candles []Candle, params GorgoniaParams) ([][]float64, []float64) {
+func PrepareDataForGorgonia(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]float64, []float64) {
+	tracker := progress.Tracker{
+		Message: "Preparing Data",
+		Total:   int64(len(candles)),
+		Units:   progress.UnitsDefault,
+	}
+	pw.AppendTracker(&tracker)
+	tracker.Start()
+
 	features := [][]float64{}
 	labels := []float64{}
 
@@ -447,6 +498,7 @@ func PrepareDataForGorgonia(candles []Candle, params GorgoniaParams) ([][]float6
 	for i := params.WindowSize; i < len(candles)-5; i++ {
 		window := candles[i-params.WindowSize : i]
 		feature := []float64{}
+		tracker.Increment(1)
 
 		for j := 0; j > -params.WindowSize; j-- {
 			// Feature extraction
@@ -496,13 +548,24 @@ func PrepareDataForGorgonia(candles []Candle, params GorgoniaParams) ([][]float6
 		labels = append(labels, float64(label))
 	}
 
-	return NormalizeData(features), labels
+	tracker.MarkAsDone()
+
+	return NormalizeData(pw, features), labels
 }
 
-func NormalizeData(features [][]float64) [][]float64 {
+func NormalizeData(pw progress.Writer, features [][]float64) [][]float64 {
+	tracker := progress.Tracker{
+		Message: "Normalizing Data",
+		Total:   int64(len(features[0]) * len(features)),
+		Units:   progress.UnitsDefault,
+	}
+	pw.AppendTracker(&tracker)
+	tracker.Start()
+
 	for i := range features[0] {
 		min, max := math.Inf(1), math.Inf(-1)
 		for j := range features {
+			tracker.Increment(1)
 			min = math.Min(min, features[j][i])
 			max = math.Max(max, features[j][i])
 		}
@@ -512,6 +575,8 @@ func NormalizeData(features [][]float64) [][]float64 {
 			}
 		}
 	}
+
+	tracker.MarkAsDone()
 	return features
 }
 
@@ -550,8 +615,16 @@ func FlattenOneHot(oneHot [][]float64) []float64 {
 	return flat
 }
 
-func BuildAndTrainNN(features [][]float64, labels []float64, epochs int) ([]tensor.Tensor, error) {
+func BuildAndTrainNN(pw progress.Writer, features [][]float64, labels []float64, epochs int) ([]tensor.Tensor, error) {
 	g := gorgonia.NewGraph()
+
+	tracker := progress.Tracker{
+		Message: "Training",
+		Total:   int64(epochs),
+		Units:   progress.UnitsDefault,
+	}
+	pw.AppendTracker(&tracker)
+	tracker.Start()
 
 	inputSize := len(features[0])
 	outputSize := 3
@@ -668,21 +741,23 @@ func BuildAndTrainNN(features [][]float64, labels []float64, epochs int) ([]tens
 			return nil, fmt.Errorf("error during solver step: %w", err)
 		}
 
-		gradW0, _ := w0.Grad()
-		gradB0, _ := b0.Grad()
-		gradW1, _ := w1.Grad()
-		gradB1, _ := b1.Grad()
+		// gradW0, _ := w0.Grad()
+		// gradB0, _ := b0.Grad()
+		// gradW1, _ := w1.Grad()
+		// gradB1, _ := b1.Grad()
 
-		fmt.Printf("Gradients - w0: %v, b0: %v, w1: %v, b1: %v\n", gradW0, gradB0, gradW1, gradB1)
+		// fmt.Printf("Gradients - w0: %v, b0: %v, w1: %v, b1: %v\n", gradW0, gradB0, gradW1, gradB1)
 
-		fmt.Printf("Epoch %d - Loss: %v\n", epoch, loss.Value())
+		tracker.SetValue(int64(epoch))
+		tracker.UpdateMessage(fmt.Sprintf("Training: %v", loss.Value()))
 	}
+	tracker.MarkAsDone()
 
-	for _, n := range g.AllNodes() {
-		grad, _ := n.Grad()
-		fmt.Printf("Node: %s, Op: %v, Has Value: %v, Has Gradient: %v\n",
-			n.Name(), n.Op(), n.Value() != nil, grad != nil)
-	}
+	// for _, n := range g.AllNodes() {
+	// 	grad, _ := n.Grad()
+	// 	fmt.Printf("Node: %s, Op: %v, Has Value: %v, Has Gradient: %v\n",
+	// 		n.Name(), n.Op(), n.Value() != nil, grad != nil)
+	// }
 
 	w0Val, _ := w0.Value().(tensor.Tensor)
 	b0Val, _ := b0.Value().(tensor.Tensor)
