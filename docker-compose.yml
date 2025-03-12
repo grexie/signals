@@ -1,0 +1,54 @@
+networks:
+  mongo:
+    external: true
+  redis:
+    external: true
+  traefik:
+    external: true
+  default:
+    driver: overlay
+
+services:
+  
+  signals:
+    image: ghcr.io/grexie/signals
+    build: .
+    networks:
+      - default
+      - mongo
+      - redis
+      - traefik
+    restart: always
+    env_file:
+      - .env
+      - .env.local
+    environment:
+      - MONGO_SUPPORTS_TRANSACTIONS=true
+      - MONGO_URL=mongodb://mongo:27017/signals?replicaSet=replicaSet
+      - ENV=production
+      - PORT=80
+    deploy:
+      replicas: 1
+      placement:
+        max_replicas_per_node: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik
+        - traefik.constraint-label=traefik
+        - "traefik.http.middlewares.signals-production-web-redirects.redirectregex.regex=^https?://(www.signals.bot)/(.*)"
+        - "traefik.http.middlewares.signals-production-web-redirects.redirectregex.replacement=https://signals.bot/$${3}"
+        - traefik.http.routers.signals-production-web-http.rule=Host(`www.signals.bot`, `signals.bot`)
+        - traefik.http.routers.signals-production-web-http.entrypoints=http
+        - traefik.http.routers.signals-production-web-http.middlewares=signchain-production-web-redirects
+        - traefik.http.routers.signals-production-web-https.rule=Host(`www.signals.bot`, `signals.bot`)
+        - traefik.http.routers.signals-production-web-https.entrypoints=https
+        - traefik.http.routers.signals-production-web-https.middlewares=signals-production-web-redirects
+        - traefik.http.routers.signals-production-web-https.tls=true
+        - traefik.http.routers.signals-production-web-https.tls.certresolver=le
+        - traefik.http.services.signals-production-web.loadbalancer.server.port=80
+    
