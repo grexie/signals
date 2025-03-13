@@ -1,91 +1,17 @@
 on: push
 
 jobs:
-  build-bin-win:
-    name: Build windows/amd64
+  build:
+    name: Build
     runs-on: ubuntu-latest
-
-    container:
-      image: "docker.io/jedich/crossbuild-with-deps:main"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Build windows/amd64
-        env:
-          SUFFIX: windows-amd64.exe
+      - name: Build
         run: |
-          /crossbuild -p "windows/amd64" --build-cmd "make build-ci"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: main
-          path: ./bin/
-
-  build-bin-linux-amd64:
-    name: Build linux/amd64
-    runs-on: ubuntu-latest
-
-    container:
-      image: "docker.io/jedich/crossbuild-with-deps:main"
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Build linux/amd64
-        env:
-          SUFFIX: linux-amd64.exe
-        run: |
-          /crossbuild -p "linux/amd64" --build-cmd "make build-ci"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: main
-          path: ./bin/
-
-  build-bin-linux-arm64:
-    name: Build Linux Binary
-    runs-on: ubuntu-latest
-
-    container:
-      image: "docker.io/jedich/crossbuild-with-deps:main"
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Build linux/arm64
-        env:
-          SUFFIX: linux-arm64.exe
-        run: |
-          /crossbuild -p "linux/arm64" --build-cmd "make build-ci"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: main
-          path: ./bin/
-
-  build-bin-darwin-arm64:
-    name: Build Linux Binary
-    runs-on: ubuntu-latest
-
-    container:
-      image: "docker.io/jedich/crossbuild-with-deps:main"
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Build darwin/arm64
-        env:
-          SUFFIX: darwin-arm64.exe
-        run: |
-          /crossbuild -p "darwin/arm64" --build-cmd "make build-ci"
+          make build-ci
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
