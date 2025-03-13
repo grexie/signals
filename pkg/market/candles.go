@@ -160,7 +160,7 @@ func FetchCandles(ctx context.Context, pw progress.Writer, mdb *mongo.Database, 
 		tracker := &progress.Tracker{
 			Message: "Fetching candles from API",
 			Units:   progress.UnitsDefault,
-			Total:   int64((end.Sub(start) / duration) + 1),
+			Total:   int64((end.Sub(start) / CandleBarToDuration(bar)) + 1),
 		}
 		if pw != nil {
 			pw.AppendTracker(tracker)

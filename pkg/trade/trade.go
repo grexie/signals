@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -148,30 +149,32 @@ type OrderResponse struct {
 	OutTime string `json:"outTime"`
 }
 
-func getContractMultiplier(instId string) (float64, float64, error) {
+func getContractMultiplier(instId string) (float64, float64, float64, float64, error) {
 	path := fmt.Sprintf("%s/api/v5/public/instruments?instType=SWAP&instId=%s", OKX_BASE_URL(), instId)
 	response, err := http.Get(path)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, 0, err
 	}
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, 0, err
 	}
 
 	var result map[string]any
 	json.Unmarshal(body, &result)
 
 	if result["code"] != "0" {
-		return 0, 0, fmt.Errorf("failed to fetch instrument data: %s", result["msg"])
+		return 0, 0, 0, 0, fmt.Errorf("failed to fetch instrument data: %s", result["msg"])
 	}
 
 	data := result["data"].([]any)[0].(map[string]any)
 	contractMultiplier, _ := strconv.ParseFloat(data["ctVal"].(string), 64)
 	maxSz, _ := strconv.ParseFloat(data["maxMktSz"].(string), 64) // OKX max allowed position size
+	minSz, _ := strconv.ParseFloat(data["minSz"].(string), 64)    // OKX min allowed position size
+	lotSz, _ := strconv.ParseFloat(data["lotSz"].(string), 64)    // OKX lot size
 
-	return contractMultiplier, maxSz, nil
+	return contractMultiplier, maxSz, minSz, lotSz, nil
 }
 
 func PlaceOrder(ctx context.Context, instrument string, isLong bool, usdt float64, takeProfit float64, stopLoss float64, leverage float64) (*OrderDetails, error) {
@@ -193,7 +196,7 @@ func PlaceOrder(ctx context.Context, instrument string, isLong bool, usdt float6
 	}
 
 	// Get contract multiplier and max size
-	contractMultiplier, maxSz, err := getContractMultiplier(instrument)
+	contractMultiplier, maxSz, minSz, lotSz, err := getContractMultiplier(instrument)
 	if err != nil {
 		return nil, err
 	}
@@ -212,13 +215,18 @@ func PlaceOrder(ctx context.Context, instrument string, isLong bool, usdt float6
 
 	url := OKX_BASE_URL() + "/api/v5/trade/order"
 
-	quantity := (leverage * (usdt * (1 - leverage*model.Commission))) / (entryPrice * contractMultiplier)
+	quantity := (leverage * (usdt * (1 - leverage*model.Commission()))) / (entryPrice * contractMultiplier)
+	quantity = math.Floor(quantity*math.Pow(10, -math.Log10(lotSz))) * math.Pow(10, math.Log10(lotSz))
 
 	if quantity > maxSz {
 		quantity = maxSz
 	}
 
-	sz := fmt.Sprintf("%0.2f", quantity)
+	if quantity < minSz {
+		return nil, fmt.Errorf("quantity %0.06f is less than minimum order size %0.06f", quantity, minSz)
+	}
+
+	sz := fmt.Sprintf("%0.6f", quantity)
 
 	body := map[string]string{
 		"instId":      instrument,
@@ -261,6 +269,7 @@ func PlaceOrder(ctx context.Context, instrument string, isLong bool, usdt float6
 	}
 
 	if order.Code != "0" {
+		log.Println(order)
 		return nil, fmt.Errorf("failed to place order: %s", order.Msg)
 	}
 
@@ -340,15 +349,16 @@ func GetPositions(ctx context.Context) (*AccountPositionsResponse, error) {
 	return &res, nil
 }
 
-func CheckPositions(ctx context.Context, instrument string) (bool, error) {
+func CheckPositions(ctx context.Context, instrument string) (bool, *AccountPositionsResponse, error) {
 	if positions, err := GetPositions(ctx); err != nil {
-		return false, err
+		return false, nil, err
 	} else {
 		for _, p := range positions.Data {
 			if p.InstrumentID == instrument {
-				return true, nil
+				return true, positions, nil
 			}
 		}
+
+		return false, positions, nil
 	}
-	return false, nil
 }

@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
-	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/grexie/signals/pkg/db"
+	"github.com/grexie/signals/pkg/market"
 	"github.com/grexie/signals/pkg/model"
 	"github.com/grexie/signals/pkg/trade"
+	"github.com/jedib0t/go-pretty/v6/progress"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/joho/godotenv"
 )
 
@@ -52,9 +57,78 @@ func main() {
 		}
 	}
 
-	if m, err := model.NewEnsembleModel(context.Background(), db, "DOGE-USDT-SWAP", generationsDuration, generations); err != nil {
+	instrument := "DOGE-USDT-SWAP"
+	if i, ok := os.LookupEnv("SIGNALS_INSTRUMENT"); ok {
+		instrument = i
+	}
+
+	candles := model.Candles()
+	tp, sl := model.TakeProfit(), model.StopLoss()
+	leverage := model.Leverage()
+	tm := model.TradeMultiplier()
+	commission := model.Commission()
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetTitle("Model Config")
+	t.AppendRows([]table.Row{
+		{"SIGNALS_INSTRUMENT", instrument},
+		{"SIGNALS_CANDLES", fmt.Sprintf("%d", candles)},
+		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%0.04f", tp)},
+		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%0.04f", sl)},
+		{"SIGNALS_LEVERAGE", fmt.Sprintf("%0.0f", leverage)},
+		{"SIGNALS_TRADE_MULTIPLIER", fmt.Sprintf("%0.04f", tm)},
+		{"SIGNALS_COMMISSION", fmt.Sprintf("%0.04f", commission)},
+	})
+	t.Render()
+
+	t = table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetTitle("Trade Info")
+	t.AppendRows([]table.Row{
+		{"Take Profit", fmt.Sprintf("%0.02f%%", 100*tp/tm)},
+		{"Stop Loss", fmt.Sprintf("%0.02f%%", 100*sl*tm)},
+		{"Leverage", fmt.Sprintf("%0.0f", leverage)},
+		{"TP %", fmt.Sprintf("%0.02f%%", 100*tp/(tm*leverage))},
+		{"SL %", fmt.Sprintf("%0.02f%%", 100*sl*tm/leverage)},
+		{"Commission", fmt.Sprintf("%0.02f%%", 100*commission*leverage)},
+	})
+	t.Render()
+
+	pw := progress.NewWriter()
+	pw.SetMessageLength(40)
+	pw.SetNumTrackersExpected(6)
+	pw.SetSortBy(progress.SortByPercentDsc)
+	pw.SetStyle(progress.StyleDefault)
+	pw.SetTrackerLength(15)
+	pw.SetTrackerPosition(progress.PositionRight)
+	pw.SetUpdateFrequency(time.Millisecond * 100)
+	pw.Style().Colors = progress.StyleColorsExample
+	pw.Style().Options.PercentFormat = "%2.0f%%"
+	go pw.Render()
+
+	now := time.Now()
+	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m)
+outer:
+	for {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Fatalf("context error: %v", ctx.Err())
+			}
+			break outer
+		}
+	}
+	pw.Stop()
+	for pw.IsRenderInProgress() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, generationsDuration, generations); err != nil {
 		log.Fatalf("error instantiating ensemble model: %v", err)
 	} else {
+
 		for {
 			nextTime := time.Now().Add(1 * time.Minute).Truncate(time.Minute)
 			<-time.After(time.Until(nextTime))
@@ -71,26 +145,33 @@ func main() {
 					log.Printf("strategy: SHORT %s", votes)
 				}
 
-				if hasPositions, err := trade.CheckPositions(context.Background(), "DOGE-USDT-SWAP"); err != nil {
+				if hasPositions, positions, err := trade.CheckPositions(context.Background(), instrument); err != nil {
 					log.Println(err)
 					continue
 				} else if hasPositions {
-					log.Println("position open for DOGE-USDT-SWAP")
+					for _, position := range positions.Data {
+						if position.InstrumentID == instrument {
+							if upnl, err := strconv.ParseFloat(position.UnrealisedPnL, 64); err != nil {
+								log.Printf("error converting upnl %s to float: %v", position.UnrealisedPnL, err)
+							} else {
+								log.Printf("%s: %s %sx PX %s/%s UPnL %0.02f", instrument, strings.ToUpper(position.PositionSide), position.Leverage, position.Position, position.AveragePrice, upnl)
+							}
+						}
+					}
 				} else if equity, err := trade.GetEquity(context.Background()); err != nil {
 					log.Println(err)
 					continue
 				} else {
-					equity = math.Min(equity, 12500)
 					switch strategy {
 					case model.StrategyLong:
-						if order, err := trade.PlaceOrder(context.Background(), "DOGE-USDT-SWAP", true, equity, model.TakeProfit, model.StopLoss, model.Leverage); err != nil {
+						if order, err := trade.PlaceOrder(context.Background(), instrument, true, equity, tp/tm, sl*tm, leverage); err != nil {
 							log.Println(err)
 							continue
 						} else {
 							log.Printf("placed LONG market order: %s %s", order.Instrument, order.OrderID)
 						}
 					case model.StrategyShort:
-						if order, err := trade.PlaceOrder(context.Background(), "DOGE-USDT-SWAP", false, equity, model.TakeProfit, model.StopLoss, model.Leverage); err != nil {
+						if order, err := trade.PlaceOrder(context.Background(), instrument, false, equity, tp/tm, sl*tm, leverage); err != nil {
 							log.Println(err)
 							continue
 						} else {

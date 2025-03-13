@@ -143,7 +143,7 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 	noImprovementCount := 0
 	bestWeights := make([]tensor.Tensor, 4)
 
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		tracker.SetValue(int64(epoch))
 
 		// Training phase

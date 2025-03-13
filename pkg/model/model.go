@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/grexie/signals/pkg/market"
@@ -15,15 +17,76 @@ import (
 	"gorgonia.org/tensor"
 )
 
-const (
-	Candles = 5
+var (
+	Candles = func() int {
+		ca := 1
+		if c, ok := os.LookupEnv("SIGNALS_CANDLES"); ok {
+			if c, err := strconv.ParseInt(c, 10, 32); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_CANDLES: %s", err)
+			} else {
+				ca = int(c)
+			}
+		}
+		return ca
+	}
 )
 
-const (
-	TakeProfit = 0.4
-	StopLoss   = 0.1
-	Leverage   = 50
-	Commission = 0.001
+var (
+	TakeProfit = func() float64 {
+		tp := 0.4
+		if t, ok := os.LookupEnv("SIGNALS_TAKE_PROFIT"); ok {
+			if t, err := strconv.ParseFloat(t, 64); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_TAKE_PROFIT: %s", err)
+			} else {
+				tp = t
+			}
+		}
+		return tp
+	}
+	StopLoss = func() float64 {
+		sl := 0.1
+		if s, ok := os.LookupEnv("SIGNALS_STOP_LOSS"); ok {
+			if s, err := strconv.ParseFloat(s, 64); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_STOP_LOSS: %s", err)
+			} else {
+				sl = s
+			}
+		}
+		return sl
+	}
+	TradeMultiplier = func() float64 {
+		tm := 1.0
+		if t, ok := os.LookupEnv("SIGNALS_TRADE_MULTIPLIER"); ok {
+			if t, err := strconv.ParseFloat(t, 64); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_TRADE_MULTIPLIER: %s", err)
+			} else {
+				tm = t
+			}
+		}
+		return tm
+	}
+	Leverage = func() float64 {
+		lever := 50.0
+		if l, ok := os.LookupEnv("SIGNALS_LEVERAGE"); ok {
+			if l, err := strconv.ParseFloat(l, 64); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_LEVERAGE: %s", err)
+			} else {
+				lever = l
+			}
+		}
+		return lever
+	}
+	Commission = func() float64 {
+		co := 0.001
+		if c, ok := os.LookupEnv("SIGNALS_COMMISSION"); ok {
+			if c, err := strconv.ParseFloat(c, 64); err != nil {
+				log.Fatalf("failed to parse env.SIGNALS_COMMISSION: %s", err)
+			} else {
+				co = c
+			}
+		}
+		return co
+	}
 )
 
 type ModelMetrics struct {
@@ -35,9 +98,10 @@ type ModelMetrics struct {
 }
 
 type Model struct {
-	weights []tensor.Tensor
-	db      *mongo.Database
-	Metrics ModelMetrics
+	weights    []tensor.Tensor
+	db         *mongo.Database
+	Instrument string
+	Metrics    ModelMetrics
 }
 
 func (m ModelMetrics) Write(w io.Writer) error {
@@ -154,7 +218,7 @@ func calculateMetrics(confusionMatrix [][]int, total int) ModelMetrics {
 }
 
 func NewModel(ctx context.Context, pw progress.Writer, db *mongo.Database, instrument string, from time.Time, to time.Time) (*Model, error) {
-	ctx, ch := market.FetchCandles(ctx, pw, db, "DOGE-USDT-SWAP", from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m)
+	ctx, ch := market.FetchCandles(ctx, pw, db, instrument, from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m)
 
 	var candles []Candle
 outer:
@@ -177,8 +241,13 @@ outer:
 		return nil, fmt.Errorf("no candle data received")
 	}
 
+	numCandles := Candles()
+	tp, sl := TakeProfit(), StopLoss()
+	commission := Commission()
+	leverage := Leverage()
+
 	// Ensure we have enough candle data (at least 200 window + 5 for prediction)
-	required := 200 + Candles
+	required := 200 + numCandles
 	if len(candles) < required {
 		return nil, fmt.Errorf("insufficient candle data: need at least %d candles, got %d", required, len(candles))
 	}
@@ -188,11 +257,11 @@ outer:
 		candles,
 		GorgoniaParams{
 			WindowSize:      200,
-			StrategyCandles: Candles,
-			StrategyLong:    TakeProfit / Leverage,
-			StrategyShort:   TakeProfit / Leverage,
-			StrategyHold:    StopLoss / Leverage,
-			TradeCommission: Commission * Leverage,
+			StrategyCandles: numCandles,
+			StrategyLong:    tp / leverage,
+			StrategyShort:   tp / leverage,
+			StrategyHold:    sl / leverage,
+			TradeCommission: commission * leverage,
 		},
 	)
 
@@ -224,6 +293,7 @@ outer:
 
 		for i, features := range testingFeatures {
 			pred, err := Predict(weights, features)
+			tracker.Increment(1)
 			if err != nil {
 				log.Printf("prediction error for sample %d: %v", i, err)
 				continue
@@ -238,14 +308,16 @@ outer:
 				correct++
 			}
 		}
+		tracker.MarkAsDone()
 
 		// Calculate detailed metrics
 		metrics := calculateMetrics(confusionMatrix, total)
 
 		return &Model{
-			weights: weights,
-			db:      db,
-			Metrics: metrics,
+			weights:    weights,
+			db:         db,
+			Instrument: instrument,
+			Metrics:    metrics,
 		}, nil
 	}
 }
@@ -265,7 +337,7 @@ func argmax(slice []float64) int {
 func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time) ([]float64, Strategy, error) {
 	if feature == nil {
 		from := now.Truncate(time.Minute).Add(-400 * time.Minute)
-		ctx, ch := market.FetchCandles(context.Background(), nil, nil, "DOGE-USDT-SWAP", from, now, market.CandleBar1m)
+		ctx, ch := market.FetchCandles(context.Background(), nil, nil, m.Instrument, from, now, market.CandleBar1m)
 
 		var candles []Candle
 	outer:
@@ -284,12 +356,16 @@ func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time) (
 			}
 		}
 
+		tp, sl := TakeProfit(), StopLoss()
+		commission := Commission()
+		leverage := Leverage()
+
 		feature = PrepareForPrediction(candles, GorgoniaParams{
 			WindowSize:      200,
-			StrategyLong:    TakeProfit / Leverage,
-			StrategyShort:   TakeProfit / Leverage,
-			StrategyHold:    StopLoss / Leverage,
-			TradeCommission: Commission * Leverage,
+			StrategyLong:    tp / leverage,
+			StrategyShort:   tp / leverage,
+			StrategyHold:    sl / leverage,
+			TradeCommission: commission * leverage,
 		})
 	}
 
