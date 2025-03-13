@@ -57,6 +57,15 @@ func main() {
 		}
 	}
 
+	cooldown := time.Duration(5) * time.Minute
+	if c, ok := os.LookupEnv("SIGNALS_COOLDOWN"); ok {
+		if c, err := strconv.ParseInt(c, 10, 64); err != nil {
+			log.Fatalf("error parsing env.SIGNALS_COOLDOWN: %v", err)
+		} else {
+			cooldown = time.Duration(c) * time.Second
+		}
+	}
+
 	instrument := "DOGE-USDT-SWAP"
 	if i, ok := os.LookupEnv("SIGNALS_INSTRUMENT"); ok {
 		instrument = i
@@ -79,6 +88,7 @@ func main() {
 		{"SIGNALS_LEVERAGE", fmt.Sprintf("%0.0f", leverage)},
 		{"SIGNALS_TRADE_MULTIPLIER", fmt.Sprintf("%0.04f", tm)},
 		{"SIGNALS_COMMISSION", fmt.Sprintf("%0.04f", commission)},
+		{"SIGNALS_COOLDOWN", fmt.Sprintf("%0.0f", cooldown.Seconds())},
 	})
 	t.Render()
 
@@ -125,6 +135,8 @@ outer:
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	notBefore := time.Time{}
+
 	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, generationsDuration, generations); err != nil {
 		log.Fatalf("error instantiating ensemble model: %v", err)
 	} else {
@@ -161,7 +173,7 @@ outer:
 				} else if equity, err := trade.GetEquity(context.Background()); err != nil {
 					log.Println(err)
 					continue
-				} else {
+				} else if notBefore.Before(time.Now()) {
 					switch strategy {
 					case model.StrategyLong:
 						if order, err := trade.PlaceOrder(context.Background(), instrument, true, equity, tp/tm, sl*tm, leverage); err != nil {
@@ -169,6 +181,8 @@ outer:
 							continue
 						} else {
 							log.Printf("placed LONG market order: %s %s", order.Instrument, order.OrderID)
+							notBefore = time.Now().Add(cooldown)
+							log.Printf("cooling down, next trade %s", notBefore)
 						}
 					case model.StrategyShort:
 						if order, err := trade.PlaceOrder(context.Background(), instrument, false, equity, tp/tm, sl*tm, leverage); err != nil {
@@ -176,6 +190,8 @@ outer:
 							continue
 						} else {
 							log.Printf("placed SHORT market order: %s %s", order.Instrument, order.OrderID)
+							notBefore = time.Now().Add(cooldown)
+							log.Printf("cooling down, next trade %s", notBefore)
 						}
 					}
 				}
