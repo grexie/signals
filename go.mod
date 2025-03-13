@@ -9,7 +9,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/joho/godotenv v1.5.1
-	go.mongodb.org/mongo-driver v1.17.3
+	github.com/syndtr/goleveldb v1.0.0
 	gorgonia.org/gorgonia v0.9.18
 	gorgonia.org/tensor v0.9.24
 )
@@ -27,23 +27,16 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v2.0.6+incompatible // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/leesper/go_rng v0.0.0-20190531154944-a612b043e353 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
-	github.com/xdg-go/scram v1.1.2 // indirect
-	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xtgo/set v1.0.0 // indirect
-	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	go.mongodb.org/mongo-driver v1.17.3 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20231121144256-b99613f794b6 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

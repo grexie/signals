@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/progress"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type EnsembleModel struct {
@@ -20,7 +20,7 @@ type EnsembleModel struct {
 	Frequency  time.Duration
 }
 
-func NewEnsembleModel(ctx context.Context, db *mongo.Database, instrument string, frequency time.Duration, count int) (*EnsembleModel, error) {
+func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, frequency time.Duration, count int) (*EnsembleModel, error) {
 	now := time.Now()
 
 	log.Printf("creating ensemble with %d active generations with duration %s...", count, frequency.String())
@@ -79,7 +79,7 @@ func (e *EnsembleModel) EvictModel(index int) {
 	log.Printf("evicted model with timestamp %s, %d generations running", ts, len(e.Models))
 }
 
-func (e *EnsembleModel) AddModel(ctx context.Context, db *mongo.Database, instrument string, frequency time.Duration, timestamp time.Time) error {
+func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument string, frequency time.Duration, timestamp time.Time) error {
 	pw := progress.NewWriter()
 	pw.SetMessageLength(40)
 	pw.SetNumTrackersExpected(6)

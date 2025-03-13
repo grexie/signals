@@ -13,7 +13,7 @@ import (
 	"github.com/grexie/signals/pkg/market"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/v6/progress"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/syndtr/goleveldb/leveldb"
 	"gorgonia.org/tensor"
 )
 
@@ -99,7 +99,7 @@ type ModelMetrics struct {
 
 type Model struct {
 	weights    []tensor.Tensor
-	db         *mongo.Database
+	db         *leveldb.DB
 	Instrument string
 	Metrics    ModelMetrics
 }
@@ -217,7 +217,7 @@ func calculateMetrics(confusionMatrix [][]int, total int) ModelMetrics {
 	return metrics
 }
 
-func NewModel(ctx context.Context, pw progress.Writer, db *mongo.Database, instrument string, from time.Time, to time.Time) (*Model, error) {
+func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, from time.Time, to time.Time) (*Model, error) {
 	ctx, ch := market.FetchCandles(ctx, pw, db, instrument, from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m)
 
 	var candles []Candle

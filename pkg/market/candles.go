@@ -4,30 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/grexie/signals/pkg/db"
 	"github.com/jedib0t/go-pretty/v6/progress"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type Candle struct {
-	ID         primitive.ObjectID `bson:"_id"`
-	Timestamp  time.Time          `bson:"timestamp"`
-	Instrument string             `bson:"instrument"`
-	Network    string             `bson:"network"`
-	Open       float64            `bson:"open"`
-	High       float64            `bson:"high"`
-	Low        float64            `bson:"low"`
-	Close      float64            `bson:"close"`
-	Volume     float64            `bson:"volume"`
+	Timestamp  time.Time `bson:"timestamp"`
+	Instrument string    `bson:"instrument"`
+	Network    string    `bson:"network"`
+	Open       float64   `bson:"open"`
+	High       float64   `bson:"high"`
+	Low        float64   `bson:"low"`
+	Close      float64   `bson:"close"`
+	Volume     float64   `bson:"volume"`
 }
 
 type candleData [][]string
@@ -54,7 +50,6 @@ func newCandlesFromData(instrument string, data [][]string) ([]Candle, error) {
 			return nil, err
 		} else {
 			out[i] = Candle{
-				ID:         primitive.NewObjectID(),
 				Timestamp:  time.UnixMilli(timestamp),
 				Instrument: instrument,
 				Network:    "okx",
@@ -74,7 +69,7 @@ func newCandlesFromData(instrument string, data [][]string) ([]Candle, error) {
 	return out, nil
 }
 
-func FetchCandles(ctx context.Context, pw progress.Writer, mdb *mongo.Database, instrument string, start time.Time, end time.Time, bar CandleBar) (context.Context, chan Candle) {
+func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, start time.Time, end time.Time, bar CandleBar) (context.Context, chan Candle) {
 	client := resty.New()
 	candles := 100
 	out := make(chan Candle, candles*100)
@@ -86,72 +81,38 @@ func FetchCandles(ctx context.Context, pw progress.Writer, mdb *mongo.Database, 
 		defer close(out)
 		defer cancel(nil)
 
-		if mdb != nil {
-			if err := db.EnsureIndex(mdb, ctx, "candles", mongo.IndexModel{
-				Keys: bson.D{
-					bson.E{Key: "instrument", Value: 1},
-					bson.E{Key: "network", Value: 1},
-					bson.E{Key: "timestamp", Value: 1},
-				},
-				Options: options.Index().SetName("candles").SetUnique(true),
-			}); err != nil {
-				cancel(err)
-				return
-			}
-
+		if db != nil {
 			tracker := &progress.Tracker{
 				Message: "Fetching candles from cache",
 				Units:   progress.UnitsDefault,
 			}
 
-			if count, err := mdb.Collection("candles").CountDocuments(ctx, bson.M{
-				"instrument": instrument,
-				"network":    "okx",
-				"timestamp": bson.M{
-					"$gte": start,
-					"$lte": end,
-				},
-			}); err != nil {
-				log.Println("failed to count candles in database:", err)
-				cancel(err)
-				return
-			} else if count > 0 {
-				tracker.Total = count
-				if pw != nil {
-					pw.AppendTracker(tracker)
+			iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", instrument, "okx"))), nil)
+			candles := []Candle{}
+			for iter.Next() {
+				var candle Candle
+				if err := json.Unmarshal(iter.Value(), &candle); err != nil {
+					cancel(err)
+					return
 				}
-				tracker.Start()
-			}
 
-			if cursor, err := mdb.Collection("candles").Find(ctx, bson.M{
-				"instrument": instrument,
-				"network":    "okx",
-				"timestamp": bson.M{
-					"$gte": start,
-					"$lte": end,
-				},
-			}, options.Find().SetSort(bson.M{"timestamp": 1})); err != nil {
-				log.Println("failed to fetch candles from database:", err)
-				cancel(err)
-				return
-			} else {
-				for cursor.Next(ctx) {
-					var candle Candle
-					if err := cursor.Decode(&candle); err != nil {
-						cancel(err)
-						return
-					}
-
+				if candle.Timestamp.After(start) && candle.Timestamp.Before(end) {
 					tracker.Increment(1)
-					start = candle.Timestamp
-
-					select {
-					case out <- candle:
-					case <-ctx.Done():
-						return
-					}
+					candles = append(candles, candle)
 				}
 			}
+			slices.SortFunc(candles, func(a Candle, b Candle) int {
+				return a.Timestamp.Compare(b.Timestamp)
+			})
+			if len(candles) > 0 {
+				start = candles[len(candles)-1].Timestamp
+			}
+			iter.Release()
+
+			for _, candle := range candles {
+				out <- candle
+			}
+
 			tracker.MarkAsDone()
 		}
 
@@ -203,9 +164,12 @@ func FetchCandles(ctx context.Context, pw progress.Writer, mdb *mongo.Database, 
 				} else {
 					for _, candle := range candles {
 						tracker.Increment(1)
-						if mdb != nil {
-							if _, err := mdb.Collection("candles").InsertOne(ctx, candle); err != nil {
-								cancel(err)
+						if db != nil {
+							if b, err := json.Marshal(candle); err != nil {
+								cancel(fmt.Errorf("failed to cache candle: %v", err))
+								return
+							} else if err := db.Put(fmt.Appendf([]byte{}, "%s-%s-%d", instrument, "okx", candle.Timestamp.Unix()), b, nil); err != nil {
+								cancel(fmt.Errorf("failed to cache candle: %v", err))
 								return
 							}
 						}

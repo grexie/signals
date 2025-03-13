@@ -2,3 +2,4 @@
 .vscode
 .env*.local
 bin/
+signals-cache.db/

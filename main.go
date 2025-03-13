@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grexie/signals/pkg/db"
 	"github.com/grexie/signals/pkg/market"
 	"github.com/grexie/signals/pkg/model"
 	"github.com/grexie/signals/pkg/trade"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/joho/godotenv"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func loadEnv(filenames ...string) {
@@ -34,9 +34,9 @@ func main() {
 	}
 	loadEnv(".env."+os.Getenv("ENV")+".local", ".env."+os.Getenv("ENV"), ".env.local", ".env")
 
-	db, err := db.ConnectMongo()
+	db, err := leveldb.OpenFile("signals-cache.db", nil)
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		log.Fatalf("failed to open signals-cache.db: %v", err)
 	}
 
 	generations := 24
