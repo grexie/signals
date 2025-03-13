@@ -17,4 +17,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: main
+          include-hidden-files: true
           path: ./bin/
