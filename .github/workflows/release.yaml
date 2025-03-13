@@ -19,6 +19,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            bin/
+            bin/signals-windows-amd64.exe
+            bin/signals-linux-amd64
+            bin/signals-linux-arm64
+            bin/signals-darwin-arm64
+            bin/.env.local
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
