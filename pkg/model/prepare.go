@@ -107,36 +107,36 @@ func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
 	}
 
 	// Calculate base technical indicators
-	ma50 := ta.MovingAverage(closes, 50)
-	ma200 := ta.MovingAverage(closes, 200)
-	rsi14 := ta.RSI(closes, 14)
-	rsi5 := ta.RSI(closes, 5) // Short-term RSI for quick movements
-	macd, macdSignal := ta.MACD(closes, 12, 26, 9)
-	macdFast, macdFastSignal := ta.MACD(closes, 5, 35, 5) // Faster MACD
-	ma20, bbUpper, bbLower := ta.BollingerBands(closes, 20, 2.0)
-	stochK, stochD := ta.StochasticOscillator(closes, lows, highs, 14)
+	ma50 := ta.MovingAverage(closes, params.ShortMovingAverageLength)
+	ma200 := ta.MovingAverage(closes, params.LongMovingAverageLength)
+	rsi14 := ta.RSI(closes, params.LongRSILength)
+	rsi5 := ta.RSI(closes, params.ShortRSILength) // Short-term RSI for quick movements
+	macd, macdSignal := ta.MACD(closes, params.ShortMACDWindowLength, params.LongMACDWindowLength, params.MACDSignalWindow)
+	macdFast, macdFastSignal := ta.MACD(closes, params.FastShortMACDWindowLength, params.FastLongMACDWindowLength, params.FastMACDSignalWindow) // Faster MACD
+	ma20, bbUpper, bbLower := ta.BollingerBands(closes, params.BollingerBandsWindow, params.BollingerBandsMultiplier)
+	stochK, stochD := ta.StochasticOscillator(closes, lows, highs, params.StochasticOscillatorWindow)
 	vwap := ta.VWAP(closes, volumes)
 
 	// Additional technical indicators
-	atr14 := ta.ATR(highs, lows, closes, 14)
-	atr20 := ta.ATR(highs, lows, closes, 20)
+	atr14 := ta.ATR(highs, lows, closes, params.FastATRPeriod)
+	atr20 := ta.ATR(highs, lows, closes, params.SlowATRPeriod)
 	obv := ta.OBV(closes, volumes)
-	obvEma := ta.MovingAverage(obv, 20)
+	obvEma := ta.MovingAverage(obv, params.OBVMovingAverageLength)
 
 	// Volume indicators
-	vwma := ta.MovingAverage(volumes, 20)
-	cmf := ta.ChaikinMoneyFlow(highs, lows, closes, volumes, 20)
-	mfi := ta.MoneyFlowIndex(highs, lows, closes, volumes, 14)
+	vwma := ta.MovingAverage(volumes, params.VolumesMovingAverageLength)
+	cmf := ta.ChaikinMoneyFlow(highs, lows, closes, volumes, params.ChaikinMoneyFlowPeriod)
+	mfi := ta.MoneyFlowIndex(highs, lows, closes, volumes, params.MoneyFlowIndexPeriod)
 
 	// Momentum indicators
-	roc := ta.RateOfChange(closes, 14)
-	cci := ta.CCI(highs, lows, closes, 20)
-	williamsR := ta.WilliamsR(highs, lows, closes, 14)
+	roc := ta.RateOfChange(closes, params.RateOfChangePeriod)
+	cci := ta.CCI(highs, lows, closes, params.CCIPeriod)
+	williamsR := ta.WilliamsR(highs, lows, closes, params.WilliamsRPeriod)
 
 	// Price changes over different timeframes
-	priceChange1h := ta.PriceChanges(closes, 60)
-	priceChange4h := ta.PriceChanges(closes, 240)
-	priceChange1d := ta.PriceChanges(closes, 1440)
+	priceChange1h := ta.PriceChanges(closes, params.PriceChangeFastPeriod)
+	priceChange4h := ta.PriceChanges(closes, params.PriceChangeMediumPeriod)
+	priceChange1d := ta.PriceChanges(closes, params.PriceChangeSlowPeriod)
 
 	// Feature extraction with sliding window
 	for i := params.WindowSize; i < len(candles); i++ {

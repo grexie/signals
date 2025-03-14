@@ -88,6 +88,7 @@ func main() {
 	t.SetTitle("Model Config")
 	t.AppendRows([]table.Row{
 		{"SIGNALS_INSTRUMENT", instrument},
+		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%d", model.WindowSize())},
 		{"SIGNALS_CANDLES", fmt.Sprintf("%d", candles)},
 		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%0.04f", tp)},
 		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%0.04f", sl)},
@@ -118,8 +119,8 @@ func main() {
 		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%d", model.ChaikinMoneyFlowPeriod())},
 		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%d", model.MoneyFlowIndexPeriod())},
 		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.RateOfChangePeriod())},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.CCIPeriod())},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.WilliamsRPeriod())},
+		{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%d", model.CCIPeriod())},
+		{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%d", model.WilliamsRPeriod())},
 		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%d", model.PriceChangeFastPeriod())},
 		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%d", model.PriceChangeMediumPeriod())},
 		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%d", model.PriceChangeSlowPeriod())},
@@ -177,7 +178,7 @@ outer:
 	notBefore := time.Time{}
 
 	params := model.ModelParams{
-		WindowSize:                 200,
+		WindowSize:                 model.WindowSize(),
 		StrategyCandles:            candles,
 		StrategyLong:               tp / leverage,
 		StrategyShort:              tp / leverage,
@@ -355,8 +356,8 @@ outer:
 		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.ChaikinMoneyFlowPeriod)},
 		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%0.0f", strategy.MoneyFlowIndexPeriod)},
 		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.RateOfChangePeriod)},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.CCIPeriod)},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.WilliamsRPeriod)},
+		{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%0.0f", strategy.CCIPeriod)},
+		{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%0.0f", strategy.WilliamsRPeriod)},
 		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeFastPeriod)},
 		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeMediumPeriod)},
 		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeSlowPeriod)},
