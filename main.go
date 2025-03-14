@@ -256,7 +256,7 @@ outer:
 						}
 					}
 				} else if votes[model.StrategyShort] > votes[model.StrategyLong] && positions.HasLong(instrument) {
-					for _, position := range positions.Short(instrument) {
+					for _, position := range positions.Long(instrument) {
 						log.Printf("closing position as more votes for short than long\n%s", position)
 						if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
 							log.Println(err)
