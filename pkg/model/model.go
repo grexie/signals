@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -17,76 +18,93 @@ import (
 	"gorgonia.org/tensor"
 )
 
-var (
-	Candles = func() int {
-		ca := 1
-		if c, ok := os.LookupEnv("SIGNALS_CANDLES"); ok {
-			if c, err := strconv.ParseInt(c, 10, 32); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_CANDLES: %s", err)
+func envInt(name string, def func() int, dec func(v int) int) func() int {
+	return func() int {
+		value := def()
+		if v, ok := os.LookupEnv(name); ok {
+			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
+				log.Fatalf("failed to parse env.%s: %v", name, err)
 			} else {
-				ca = int(c)
+				value = int(v)
 			}
 		}
-		return ca
+		return dec(value)
 	}
+}
+
+func envFloat64(name string, def func() float64, dec func(v float64) float64) func() float64 {
+	return func() float64 {
+		value := def()
+		if v, ok := os.LookupEnv(name); ok {
+			if v, err := strconv.ParseFloat(v, 64); err != nil {
+				log.Fatalf("failed to parse env.%s: %v", name, err)
+			} else {
+				value = v
+			}
+		}
+		return dec(value)
+	}
+}
+
+var (
+	WindowSize = envInt("SIGNALS_WINDOW_SIZE", func() int {
+		return DefaultModelParams.WindowSize
+	}, BoundWindowSize)
+	Candles = envInt("SIGNALS_CANDLES", func() int {
+		return DefaultModelParams.StrategyCandles
+	}, BoundCandles)
 )
 
 var (
-	TakeProfit = func() float64 {
-		tp := 0.4
-		if t, ok := os.LookupEnv("SIGNALS_TAKE_PROFIT"); ok {
-			if t, err := strconv.ParseFloat(t, 64); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_TAKE_PROFIT: %s", err)
-			} else {
-				tp = t
-			}
-		}
-		return tp
-	}
-	StopLoss = func() float64 {
-		sl := 0.1
-		if s, ok := os.LookupEnv("SIGNALS_STOP_LOSS"); ok {
-			if s, err := strconv.ParseFloat(s, 64); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_STOP_LOSS: %s", err)
-			} else {
-				sl = s
-			}
-		}
-		return sl
-	}
-	TradeMultiplier = func() float64 {
-		tm := 1.0
-		if t, ok := os.LookupEnv("SIGNALS_TRADE_MULTIPLIER"); ok {
-			if t, err := strconv.ParseFloat(t, 64); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_TRADE_MULTIPLIER: %s", err)
-			} else {
-				tm = t
-			}
-		}
-		return tm
-	}
-	Leverage = func() float64 {
-		lever := 50.0
-		if l, ok := os.LookupEnv("SIGNALS_LEVERAGE"); ok {
-			if l, err := strconv.ParseFloat(l, 64); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_LEVERAGE: %s", err)
-			} else {
-				lever = l
-			}
-		}
-		return lever
-	}
-	Commission = func() float64 {
-		co := 0.001
-		if c, ok := os.LookupEnv("SIGNALS_COMMISSION"); ok {
-			if c, err := strconv.ParseFloat(c, 64); err != nil {
-				log.Fatalf("failed to parse env.SIGNALS_COMMISSION: %s", err)
-			} else {
-				co = c
-			}
-		}
-		return co
-	}
+	TakeProfit = envFloat64("SIGNALS_TAKE_PROFIT", func() float64 {
+		return DefaultModelParams.StrategyLong * Leverage()
+	}, func(v float64) float64 {
+		return BoundTakeProfit(v/Leverage()) * Leverage()
+	})
+	StopLoss = envFloat64("SIGNALS_STOP_LOSS", func() float64 {
+		return DefaultModelParams.StrategyHold * Leverage()
+	}, func(v float64) float64 {
+		return BoundStopLoss(v/Leverage()) * Leverage()
+	})
+	TradeMultiplier = envFloat64("SIGNALS_TRADE_MULTIPLIER", func() float64 {
+		return 1.0
+	}, func(v float64) float64 { return math.Max(0.5, math.Min(2, v)) })
+	Leverage = envFloat64("SIGNALS_LEVERAGE", func() float64 {
+		return 50.0
+	}, func(v float64) float64 { return math.Max(1, math.Min(100, v)) })
+	Commission = envFloat64("SIGNALS_COMMISSION", func() float64 {
+		return DefaultModelParams.TradeCommission
+	}, func(v float64) float64 { return math.Max(0, math.Min(0.5, v)) })
+)
+
+var (
+	ShortMovingAverageLength   = envInt("SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", func() int { return 50 }, BoundShortMovingAverageLength)
+	LongMovingAverageLength    = envInt("SIGNALS_LONG_MOVING_AVERAGE_LENGTH", func() int { return 200 }, BoundLongMovingAverageLength)
+	LongRSILength              = envInt("SIGNALS_LONG_RSI_LENGTH", func() int { return 14 }, BoundLongRSILength)
+	ShortRSILength             = envInt("SIGNALS_SHORT_RSI_LENGTH", func() int { return 5 }, BoundShortRSILength)
+	ShortMACDWindowLength      = envInt("SIGNALS_SHORT_MACD_WINDOW_LENGTH", func() int { return 12 }, BoundShortMACDWindowLength)
+	LongMACDWindowLength       = envInt("SIGNALS_LONG_MACD_WINDOW_LENGTH", func() int { return 26 }, BoundLongMACDWindowLength)
+	MACDSignalWindow           = envInt("SIGNALS_MACD_SIGNAL_WINDOW", func() int { return 9 }, BoundMACDSignalWindow)
+	FastShortMACDWindowLength  = envInt("SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", func() int { return 5 }, BoundFastShortMACDWindowLength)
+	FastLongMACDWindowLength   = envInt("SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", func() int { return 35 }, BoundFastLongMACDWindowLength)
+	FastMACDSignalWindow       = envInt("SIGNALS_FAST_MACD_SIGNAL_WINDOW", func() int { return 5 }, BoundFastMACDSignalWindow)
+	BollingerBandsWindow       = envInt("SIGNALS_BOLLINGER_BANDS_WINDOW", func() int { return 20 }, BoundBollingerBandsWindow)
+	BollingerBandsMultiplier   = envFloat64("SIGNALS_BOLLINGER_BANDS_MULTIPLIER", func() float64 { return 2.0 }, BoundBollingerBandsMultiplier)
+	StochasticOscillatorWindow = envInt("SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", func() int { return 14 }, BoundStochasticOscillatorWindow)
+	SlowATRPeriod              = envInt("SIGNALS_SLOW_ATR_PERIOD_WINDOW", func() int { return 14 }, BoundSlowATRPeriod)
+	FastATRPeriod              = envInt("SIGNALS_FAST_ATR_PERIOD_WINDOW", func() int { return 20 }, BoundFastATRPeriod)
+	OBVMovingAverageLength     = envInt("SIGNALS_OBV_MOVING_AVERAGE_LENGTH", func() int { return 20 }, BoundOBVMovingAverageLength)
+	VolumesMovingAverageLength = envInt("SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", func() int { return 20 }, BoundVolumesMovingAverageLength)
+	ChaikinMoneyFlowPeriod     = envInt("SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", func() int { return 20 }, BoundChaikinMoneyFlowPeriod)
+	MoneyFlowIndexPeriod       = envInt("SIGNALS_MONEY_FLOW_INDEX_PERIOD", func() int { return 14 }, BoundMoneyFlowIndexPeriod)
+	RateOfChangePeriod         = envInt("SIGNALS_RATE_OF_CHANGE_PERIOD", func() int { return 14 }, BoundRateOfChangePeriod)
+	CCIPeriod                  = envInt("SIGNALS_CCI_PERIOD", func() int { return 20 }, BoundCCIPeriod)
+	WilliamsRPeriod            = envInt("SIGNALS_WILLIAMS_R_PERIOD", func() int { return 14 }, BoundWilliamsRPeriod)
+	PriceChangeFastPeriod      = envInt("SIGNALS_PRICE_CHANGE_FAST_PERIOD", func() int { return 60 }, BoundPriceChangeFastPeriod)
+	PriceChangeMediumPeriod    = envInt("SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", func() int { return 240 }, BoundPriceChangeMediumPeriod)
+	PriceChangeSlowPeriod      = envInt("SIGNALS_PRICE_CHANGE_SLOW_PERIOD", func() int { return 1440 }, BoundPriceChangeSlowPeriod)
+	RSIUpperBound              = envFloat64("SIGNALS_RSI_UPPER_BOUND", func() float64 { return 50.0 }, BoundRSIUpperBound)
+	RSILowerBound              = envFloat64("SIGNALS_RSI_LOWER_BOUND", func() float64 { return 50.0 }, BoundRSILowerBound)
 )
 
 type ModelMetrics struct {
@@ -100,6 +118,7 @@ type ModelMetrics struct {
 type Model struct {
 	weights    []tensor.Tensor
 	db         *leveldb.DB
+	params     ModelParams
 	Instrument string
 	Metrics    ModelMetrics
 }
@@ -217,8 +236,8 @@ func calculateMetrics(confusionMatrix [][]int, total int) ModelMetrics {
 	return metrics
 }
 
-func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, from time.Time, to time.Time) (*Model, error) {
-	ctx, ch := market.FetchCandles(ctx, pw, db, instrument, from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m)
+func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, params ModelParams, from time.Time, to time.Time, fetch bool) (*Model, error) {
+	ctx, ch := market.FetchCandles(ctx, pw, db, instrument, from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m, fetch)
 
 	var candles []Candle
 outer:
@@ -241,13 +260,8 @@ outer:
 		return nil, fmt.Errorf("no candle data received")
 	}
 
-	numCandles := Candles()
-	tp, sl := TakeProfit(), StopLoss()
-	commission := Commission()
-	leverage := Leverage()
-
 	// Ensure we have enough candle data (at least 200 window + 5 for prediction)
-	required := 200 + numCandles
+	required := params.WindowSize + params.StrategyCandles
 	if len(candles) < required {
 		return nil, fmt.Errorf("insufficient candle data: need at least %d candles, got %d", required, len(candles))
 	}
@@ -255,14 +269,7 @@ outer:
 	features, labels := Prepare(
 		pw,
 		candles,
-		GorgoniaParams{
-			WindowSize:      200,
-			StrategyCandles: numCandles,
-			StrategyLong:    tp / leverage,
-			StrategyShort:   tp / leverage,
-			StrategyHold:    sl / leverage,
-			TradeCommission: commission * leverage,
-		},
+		params,
 	)
 
 	countTraining := int(float64(len(features)) * 0.8)
@@ -316,6 +323,7 @@ outer:
 		return &Model{
 			weights:    weights,
 			db:         db,
+			params:     params,
 			Instrument: instrument,
 			Metrics:    metrics,
 		}, nil
@@ -334,10 +342,10 @@ func argmax(slice []float64) int {
 	return maxIndex
 }
 
-func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time) ([]float64, Strategy, error) {
+func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time, fetch bool) ([]float64, Strategy, error) {
 	if feature == nil {
 		from := now.Truncate(time.Minute).Add(-400 * time.Minute)
-		ctx, ch := market.FetchCandles(context.Background(), nil, nil, m.Instrument, from, now, market.CandleBar1m)
+		ctx, ch := market.FetchCandles(context.Background(), nil, nil, m.Instrument, from, now, market.CandleBar1m, fetch)
 
 		var candles []Candle
 	outer:
@@ -356,17 +364,7 @@ func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time) (
 			}
 		}
 
-		tp, sl := TakeProfit(), StopLoss()
-		commission := Commission()
-		leverage := Leverage()
-
-		feature = PrepareForPrediction(candles, GorgoniaParams{
-			WindowSize:      200,
-			StrategyLong:    tp / leverage,
-			StrategyShort:   tp / leverage,
-			StrategyHold:    sl / leverage,
-			TradeCommission: commission * leverage,
-		})
+		feature = PrepareForPrediction(candles, m.params)
 	}
 
 	pred, err := Predict(m.weights, feature)

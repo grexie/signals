@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"slices"
 	"sort"
 	"strconv"
@@ -69,7 +70,7 @@ func newCandlesFromData(instrument string, data [][]string) ([]Candle, error) {
 	return out, nil
 }
 
-func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, start time.Time, end time.Time, bar CandleBar) (context.Context, chan Candle) {
+func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, start time.Time, end time.Time, bar CandleBar, fetch bool) (context.Context, chan Candle) {
 	client := resty.New()
 	candles := 100
 	out := make(chan Candle, candles*100)
@@ -92,6 +93,7 @@ func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instr
 			for iter.Next() {
 				var candle Candle
 				if err := json.Unmarshal(iter.Value(), &candle); err != nil {
+					log.Println(err)
 					cancel(err)
 					return
 				}
@@ -118,74 +120,83 @@ func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instr
 
 		duration := time.Duration(candles) * CandleBarToDuration(bar)
 
-		tracker := &progress.Tracker{
-			Message: "Fetching candles from API",
-			Units:   progress.UnitsDefault,
-			Total:   int64((end.Sub(start) / CandleBarToDuration(bar)) + 1),
-		}
-		if pw != nil {
-			pw.AppendTracker(tracker)
-		}
-		tracker.Start()
-
-		for ; start.Before(end); start = start.Add(duration) {
-			params := map[string]string{
-				"instId": instrument,
-				"bar":    string(bar),
-				"limit":  fmt.Sprintf("%d", candles),
-				"after":  fmt.Sprintf("%d", start.Add(duration).UnixMilli()),
-				"before": fmt.Sprintf("%d", start.UnixMilli()),
+		if fetch {
+			tracker := &progress.Tracker{
+				Message: "Fetching candles from API",
+				Units:   progress.UnitsDefault,
+				Total:   int64((end.Sub(start) / CandleBarToDuration(bar)) + 1),
 			}
+			if pw != nil {
+				pw.AppendTracker(tracker)
+			}
+			tracker.Start()
 
-			requested := time.Now()
-
-			if resp, err := client.R().SetContext(ctx).SetQueryParams(params).Get(url); err != nil {
-				cancel(err)
-				return
-			} else if resp.IsError() {
-				cancel(fmt.Errorf("error response: %v", resp.Status()))
-				return
-			} else {
-				var data struct {
-					Code string     `json:"code"`
-					Msg  string     `json:"msg"`
-					Data candleData `json:"data"`
+			for ; start.Before(end); start = start.Add(duration) {
+				params := map[string]string{
+					"instId": instrument,
+					"bar":    string(bar),
+					"limit":  fmt.Sprintf("%d", candles),
+					"after":  fmt.Sprintf("%d", start.Add(duration).UnixMilli()),
+					"before": fmt.Sprintf("%d", start.UnixMilli()),
 				}
 
-				if err := json.Unmarshal(resp.Body(), &data); err != nil {
-					cancel(fmt.Errorf("failed to parse response body: %s", err))
+				requested := time.Now()
+
+				if resp, err := client.R().SetContext(ctx).SetQueryParams(params).Get(url); err != nil {
+					log.Println(err)
+					cancel(err)
 					return
-				} else if data.Code != "0" {
-					cancel(fmt.Errorf("API Error: %s", data.Msg))
-					return
-				} else if candles, err := newCandlesFromData(instrument, data.Data); err != nil {
-					cancel(fmt.Errorf("failed to convert data to candles: %s", err))
+				} else if resp.IsError() {
+					log.Println(string(resp.Body()))
+					cancel(fmt.Errorf("error response: %v", resp.Status()))
 					return
 				} else {
-					for _, candle := range candles {
-						tracker.Increment(1)
-						if db != nil {
-							if b, err := json.Marshal(candle); err != nil {
-								cancel(fmt.Errorf("failed to cache candle: %v", err))
-								return
-							} else if err := db.Put(fmt.Appendf([]byte{}, "%s-%s-%d", instrument, "okx", candle.Timestamp.Unix()), b, nil); err != nil {
-								cancel(fmt.Errorf("failed to cache candle: %v", err))
+					var data struct {
+						Code string     `json:"code"`
+						Msg  string     `json:"msg"`
+						Data candleData `json:"data"`
+					}
+
+					if err := json.Unmarshal(resp.Body(), &data); err != nil {
+						log.Println(err)
+						cancel(fmt.Errorf("failed to parse response body: %s", err))
+						return
+					} else if data.Code != "0" {
+						log.Println(data)
+						cancel(fmt.Errorf("API Error: %s", data.Msg))
+						return
+					} else if candles, err := newCandlesFromData(instrument, data.Data); err != nil {
+						log.Println(err)
+						cancel(fmt.Errorf("failed to convert data to candles: %s", err))
+						return
+					} else {
+						for _, candle := range candles {
+							tracker.Increment(1)
+							if db != nil {
+								if b, err := json.Marshal(candle); err != nil {
+									log.Println(err)
+									cancel(fmt.Errorf("failed to cache candle: %v", err))
+									return
+								} else if err := db.Put(fmt.Appendf([]byte{}, "%s-%s-%d", instrument, "okx", candle.Timestamp.Unix()), b, nil); err != nil {
+									log.Println(err)
+									cancel(fmt.Errorf("failed to cache candle: %v", err))
+									return
+								}
+							}
+							select {
+							case out <- candle:
+							case <-ctx.Done():
 								return
 							}
 						}
-						select {
-						case out <- candle:
-						case <-ctx.Done():
-							return
-						}
 					}
 				}
+
+				time.Sleep(time.Until(requested.Add(200 * time.Millisecond)))
 			}
 
-			time.Sleep(time.Until(requested.Add(200 * time.Millisecond)))
+			tracker.MarkAsDone()
 		}
-
-		tracker.MarkAsDone()
 	}()
 
 	return ctx, out

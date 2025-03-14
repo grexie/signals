@@ -20,7 +20,7 @@ type EnsembleModel struct {
 	Frequency  time.Duration
 }
 
-func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, frequency time.Duration, count int) (*EnsembleModel, error) {
+func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, params ModelParams, frequency time.Duration, count int) (*EnsembleModel, error) {
 	now := time.Now()
 
 	log.Printf("creating ensemble with %d active generations with duration %s...", count, frequency.String())
@@ -33,7 +33,7 @@ func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, fr
 
 	log.Printf("training model: generation %d", 1)
 	timestamp := now.Add(time.Duration(-count-1) * frequency)
-	if err := e.AddModel(ctx, db, instrument, frequency, timestamp); err != nil {
+	if err := e.AddModel(ctx, db, instrument, params, frequency, timestamp); err != nil {
 		return nil, err
 	}
 
@@ -44,7 +44,7 @@ func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, fr
 			}
 			log.Printf("training model: generation %d", i+1)
 			timestamp := now.Add(time.Duration(i-count-1) * frequency)
-			e.AddModel(ctx, db, instrument, frequency, timestamp)
+			e.AddModel(ctx, db, instrument, params, frequency, timestamp)
 		}
 
 		go func() {
@@ -57,7 +57,7 @@ func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, fr
 					log.Printf("training model: generation %d", generation+1)
 					generation++
 					now = now.Add(frequency)
-					e.AddModel(ctx, db, instrument, frequency, now)
+					e.AddModel(ctx, db, instrument, params, frequency, now)
 					e.EvictModel(0)
 				}
 			}
@@ -79,7 +79,7 @@ func (e *EnsembleModel) EvictModel(index int) {
 	log.Printf("evicted model with timestamp %s, %d generations running", ts, len(e.Models))
 }
 
-func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument string, frequency time.Duration, timestamp time.Time) error {
+func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument string, params ModelParams, frequency time.Duration, timestamp time.Time) error {
 	pw := progress.NewWriter()
 	pw.SetMessageLength(40)
 	pw.SetNumTrackersExpected(6)
@@ -92,7 +92,7 @@ func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
 
-	if m, err := NewModel(ctx, pw, db, instrument, timestamp.AddDate(0, -1, 0), timestamp); err != nil {
+	if m, err := NewModel(ctx, pw, db, instrument, params, timestamp.AddDate(0, -1, 0), timestamp, true); err != nil {
 		return err
 	} else {
 		pw.Stop()
@@ -123,7 +123,7 @@ func (e *EnsembleModel) Predict(ctx context.Context, now time.Time) (Strategy, S
 
 	feature := []float64(nil)
 	for _, m := range models {
-		f, s, err := m.Predict(ctx, feature, now)
+		f, s, err := m.Predict(ctx, feature, now, true)
 		if err != nil {
 			return StrategyHold, votes, err
 		}

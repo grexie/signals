@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -310,7 +311,72 @@ type AccountPositionsResponse struct {
 		AveragePrice  string `json:"avgPx"`
 		UnrealisedPnL string `json:"upl"`
 		Margin        string `json:"margin"`
+		MarginMode    string `json:"mgnMode"`
 	} `json:"data"`
+}
+
+type Position struct {
+	Instrument    string
+	PositionSide  string
+	Margin        string
+	MarginMode    string
+	Leverage      string
+	Position      string
+	AveragePrice  string
+	UnrealisedPnL string
+}
+
+func (p *Position) String() string {
+	upnl, _ := strconv.ParseFloat(p.UnrealisedPnL, 64)
+	return fmt.Sprintf("%s: %s %sx PX %s/%s UPnL %0.02f", p.Instrument, strings.ToUpper(p.PositionSide), p.Leverage, p.Position, p.AveragePrice, upnl)
+}
+
+func (r *AccountPositionsResponse) Long(instrument string) []Position {
+	out := []Position{}
+	for _, d := range r.Data {
+		if d.InstrumentID == instrument && d.PositionSide == "long" {
+			out = append(out, Position{
+				Instrument:    d.InstrumentID,
+				PositionSide:  d.PositionSide,
+				Margin:        d.Margin,
+				MarginMode:    d.MarginMode,
+				Leverage:      d.Leverage,
+				Position:      d.Position,
+				AveragePrice:  d.AveragePrice,
+				UnrealisedPnL: d.UnrealisedPnL,
+			})
+		}
+	}
+
+	return out
+}
+
+func (r *AccountPositionsResponse) Short(instrument string) []Position {
+	out := []Position{}
+	for _, d := range r.Data {
+		if d.InstrumentID == instrument && d.PositionSide == "short" {
+			out = append(out, Position{
+				Instrument:    d.InstrumentID,
+				PositionSide:  d.PositionSide,
+				Margin:        d.Margin,
+				MarginMode:    d.MarginMode,
+				Leverage:      d.Leverage,
+				Position:      d.Position,
+				AveragePrice:  d.AveragePrice,
+				UnrealisedPnL: d.UnrealisedPnL,
+			})
+		}
+	}
+
+	return out
+}
+
+func (r *AccountPositionsResponse) HasLong(instrument string) bool {
+	return len(r.Long(instrument)) > 0
+}
+
+func (r *AccountPositionsResponse) HasShort(instrument string) bool {
+	return len(r.Short(instrument)) > 0
 }
 
 func GetPositions(ctx context.Context) (*AccountPositionsResponse, error) {
@@ -361,4 +427,57 @@ func CheckPositions(ctx context.Context, instrument string) (bool, *AccountPosit
 
 		return false, positions, nil
 	}
+}
+
+type ClosePositionResponse struct {
+	Code string `json:"code"`
+	Data []struct {
+		ClientOrderID string `json:"clOrdId"`
+		InstrumentID  string `json:"instId"`
+		PositionSide  string `json:"posSide"`
+		Tag           string `json:"tag"`
+	} `json:"data"`
+	Message string `json:"msg"`
+}
+
+func ClosePosition(instrument, mgnMode, posSide string) error {
+	client := resty.New()
+	endpoint := "/api/v5/trade/close-position"
+	url := OKX_BASE_URL() + endpoint
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05.999Z")
+
+	// Payload: Close a specific position (Long or Short)
+	body := map[string]string{
+		"instId":  instrument,
+		"mgnMode": mgnMode,
+		"posSide": posSide,
+	}
+
+	// Generate API Signature
+	signature := generateSignature(timestamp, "POST", endpoint, body)
+
+	// Send API Request
+	resp, err := client.R().
+		SetHeader("OK-ACCESS-KEY", API_KEY()).
+		SetHeader("OK-ACCESS-SIGN", signature).
+		SetHeader("OK-ACCESS-TIMESTAMP", timestamp).
+		SetHeader("OK-ACCESS-PASSPHRASE", API_PASSPHRASE()).
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		Post(url)
+
+	if err != nil {
+		return fmt.Errorf("error sending request: %v", err)
+	}
+
+	var res ClosePositionResponse
+	if err := json.Unmarshal(resp.Body(), &res); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %v", err)
+	}
+
+	if res.Code != "0" {
+		return fmt.Errorf("failed to close position: %s", res.Message)
+	}
+
+	return nil
 }

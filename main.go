@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grexie/signals/pkg/genetics"
 	"github.com/grexie/signals/pkg/market"
 	"github.com/grexie/signals/pkg/model"
 	"github.com/grexie/signals/pkg/trade"
@@ -77,6 +78,11 @@ func main() {
 	tm := model.TradeMultiplier()
 	commission := model.Commission()
 
+	if len(os.Args) >= 1 && os.Args[1] == "optimize" {
+		NaturalSelection(db, instrument)
+		return
+	}
+
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetTitle("Model Config")
@@ -90,6 +96,36 @@ func main() {
 		{"SIGNALS_COMMISSION", fmt.Sprintf("%0.04f", commission)},
 		{"SIGNALS_COOLDOWN", fmt.Sprintf("%0.0f", cooldown.Seconds())},
 	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
+		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.ShortMovingAverageLength())},
+		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.LongMovingAverageLength())},
+		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%d", model.LongRSILength())},
+		{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%d", model.ShortRSILength())},
+		{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", model.ShortMACDWindowLength())},
+		{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", model.LongMACDWindowLength())},
+		{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", model.MACDSignalWindow())},
+		{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", model.FastShortMACDWindowLength())},
+		{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", model.FastLongMACDWindowLength())},
+		{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", model.FastMACDSignalWindow())},
+		{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%d", model.BollingerBandsWindow())},
+		{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", model.BollingerBandsMultiplier())},
+		{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%d", model.StochasticOscillatorWindow())},
+		{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", model.SlowATRPeriod())},
+		{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", model.FastATRPeriod())},
+		{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.OBVMovingAverageLength())},
+		{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.VolumesMovingAverageLength())},
+		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%d", model.ChaikinMoneyFlowPeriod())},
+		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%d", model.MoneyFlowIndexPeriod())},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.RateOfChangePeriod())},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.CCIPeriod())},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", model.WilliamsRPeriod())},
+		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%d", model.PriceChangeFastPeriod())},
+		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%d", model.PriceChangeMediumPeriod())},
+		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%d", model.PriceChangeSlowPeriod())},
+		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", model.RSIUpperBound())},
+		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", model.RSILowerBound())},
+	})
 	t.Render()
 
 	t = table.NewWriter()
@@ -99,6 +135,9 @@ func main() {
 		{"Take Profit", fmt.Sprintf("%0.02f%%", 100*tp/tm)},
 		{"Stop Loss", fmt.Sprintf("%0.02f%%", 100*sl*tm)},
 		{"Leverage", fmt.Sprintf("%0.0f", leverage)},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
 		{"TP %", fmt.Sprintf("%0.02f%%", 100*tp/(tm*leverage))},
 		{"SL %", fmt.Sprintf("%0.02f%%", 100*sl*tm/leverage)},
 		{"Commission", fmt.Sprintf("%0.02f%%", 100*commission*leverage)},
@@ -118,7 +157,7 @@ func main() {
 	go pw.Render()
 
 	now := time.Now()
-	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m)
+	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m, true)
 outer:
 	for {
 		select {
@@ -137,7 +176,43 @@ outer:
 
 	notBefore := time.Time{}
 
-	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, generationsDuration, generations); err != nil {
+	params := model.ModelParams{
+		WindowSize:                 200,
+		StrategyCandles:            candles,
+		StrategyLong:               tp / leverage,
+		StrategyShort:              tp / leverage,
+		StrategyHold:               sl / leverage,
+		TradeCommission:            commission * leverage,
+		ShortMovingAverageLength:   model.ShortMovingAverageLength(),
+		LongMovingAverageLength:    model.LongMovingAverageLength(),
+		LongRSILength:              model.LongRSILength(),
+		ShortRSILength:             model.ShortRSILength(),
+		ShortMACDWindowLength:      model.ShortMACDWindowLength(),
+		LongMACDWindowLength:       model.LongMACDWindowLength(),
+		MACDSignalWindow:           model.MACDSignalWindow(),
+		FastShortMACDWindowLength:  model.FastShortMACDWindowLength(),
+		FastLongMACDWindowLength:   model.FastLongMACDWindowLength(),
+		FastMACDSignalWindow:       model.FastMACDSignalWindow(),
+		BollingerBandsWindow:       model.BollingerBandsWindow(),
+		BollingerBandsMultiplier:   model.BollingerBandsMultiplier(),
+		StochasticOscillatorWindow: model.StochasticOscillatorWindow(),
+		SlowATRPeriod:              model.SlowATRPeriod(),
+		FastATRPeriod:              model.FastATRPeriod(),
+		OBVMovingAverageLength:     model.OBVMovingAverageLength(),
+		VolumesMovingAverageLength: model.VolumesMovingAverageLength(),
+		ChaikinMoneyFlowPeriod:     model.ChaikinMoneyFlowPeriod(),
+		MoneyFlowIndexPeriod:       model.MoneyFlowIndexPeriod(),
+		RateOfChangePeriod:         model.RateOfChangePeriod(),
+		CCIPeriod:                  model.CCIPeriod(),
+		WilliamsRPeriod:            model.WilliamsRPeriod(),
+		PriceChangeFastPeriod:      model.PriceChangeFastPeriod(),
+		PriceChangeMediumPeriod:    model.PriceChangeMediumPeriod(),
+		PriceChangeSlowPeriod:      model.PriceChangeSlowPeriod(),
+		RSIUpperBound:              model.RSIUpperBound(),
+		RSILowerBound:              model.RSILowerBound(),
+	}
+
+	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, params, generationsDuration, generations); err != nil {
 		log.Fatalf("error instantiating ensemble model: %v", err)
 	} else {
 
@@ -173,6 +248,20 @@ outer:
 				} else if equity, err := trade.GetEquity(context.Background()); err != nil {
 					log.Println(err)
 					continue
+				} else if votes[model.StrategyLong] > votes[model.StrategyShort] && positions.HasShort(instrument) {
+					for _, position := range positions.Short(instrument) {
+						log.Printf("closing position as more votes for long than short\n%s", position)
+						if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
+							log.Println(err)
+						}
+					}
+				} else if votes[model.StrategyShort] > votes[model.StrategyLong] && positions.HasLong(instrument) {
+					for _, position := range positions.Short(instrument) {
+						log.Printf("closing position as more votes for short than long\n%s", position)
+						if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
+							log.Println(err)
+						}
+					}
 				} else if notBefore.Before(time.Now()) {
 					switch strategy {
 					case model.StrategyLong:
@@ -198,4 +287,82 @@ outer:
 			}
 		}
 	}
+}
+
+func NaturalSelection(db *leveldb.DB, instrument string) {
+	now := time.Now().Add(-5 * time.Minute)
+
+	pw := progress.NewWriter()
+	pw.SetMessageLength(40)
+	pw.SetNumTrackersExpected(6)
+	pw.SetSortBy(progress.SortByPercentDsc)
+	pw.SetStyle(progress.StyleDefault)
+	pw.SetTrackerLength(15)
+	pw.SetTrackerPosition(progress.PositionRight)
+	pw.SetUpdateFrequency(time.Millisecond * 100)
+	pw.Style().Colors = progress.StyleColorsExample
+	pw.Style().Options.PercentFormat = "%2.0f%%"
+	go pw.Render()
+
+	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m, true)
+outer:
+	for {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Fatalf("context error: %v", ctx.Err())
+			}
+			break outer
+		}
+	}
+	pw.Stop()
+	for pw.IsRenderInProgress() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.4, 0.1)
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetTitle("Best Strategy")
+	t.AppendRows([]table.Row{
+		{"SIGNALS_INSTRUMENT", strategy.Instrument},
+		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%.0f", strategy.WindowSize)},
+		{"SIGNALS_CANDLES", fmt.Sprintf("%.0f", strategy.Candles)},
+		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit)},
+		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss)},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
+		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMovingAverageLength)},
+		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMovingAverageLength)},
+		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.LongRSILength)},
+		{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortRSILength)},
+		{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMACDWindowLength)},
+		{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMACDWindowLength)},
+		{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.MACDSignalWindow)},
+		{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastShortMACDWindowLength)},
+		{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastLongMACDWindowLength)},
+		{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.FastMACDSignalWindow)},
+		{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%0.0f", strategy.BollingerBandsWindow)},
+		{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", strategy.BollingerBandsMultiplier)},
+		{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%0.0f", strategy.StochasticOscillatorWindow)},
+		{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.SlowATRPeriod)},
+		{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.FastATRPeriod)},
+		{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.OBVMovingAverageLength)},
+		{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.VolumesMovingAverageLength)},
+		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.ChaikinMoneyFlowPeriod)},
+		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%0.0f", strategy.MoneyFlowIndexPeriod)},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.RateOfChangePeriod)},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.CCIPeriod)},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.WilliamsRPeriod)},
+		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeFastPeriod)},
+		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeMediumPeriod)},
+		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeSlowPeriod)},
+		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", strategy.RSIUpperBound)},
+		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", strategy.RSILowerBound)},
+	})
+	t.Render()
+	strategy.ModelMetrics.Write(os.Stdout)
 }

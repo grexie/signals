@@ -10,16 +10,81 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 )
 
-type GorgoniaParams struct {
+type ModelParams struct {
 	WindowSize      int
 	StrategyCandles int
 	StrategyLong    float64
 	StrategyShort   float64
 	StrategyHold    float64
 	TradeCommission float64
+
+	ShortMovingAverageLength   int
+	LongMovingAverageLength    int
+	LongRSILength              int
+	ShortRSILength             int
+	ShortMACDWindowLength      int
+	LongMACDWindowLength       int
+	MACDSignalWindow           int
+	FastShortMACDWindowLength  int
+	FastLongMACDWindowLength   int
+	FastMACDSignalWindow       int
+	BollingerBandsWindow       int
+	BollingerBandsMultiplier   float64
+	StochasticOscillatorWindow int
+	SlowATRPeriod              int
+	FastATRPeriod              int
+	OBVMovingAverageLength     int
+	VolumesMovingAverageLength int
+	ChaikinMoneyFlowPeriod     int
+	MoneyFlowIndexPeriod       int
+	RateOfChangePeriod         int
+	CCIPeriod                  int
+	WilliamsRPeriod            int
+	PriceChangeFastPeriod      int
+	PriceChangeMediumPeriod    int
+	PriceChangeSlowPeriod      int
+	RSIUpperBound              float64
+	RSILowerBound              float64
 }
 
-func PrepareForPrediction(candles []Candle, params GorgoniaParams) []float64 {
+var DefaultModelParams = ModelParams{
+	WindowSize:      200,
+	StrategyCandles: 5,
+	StrategyLong:    0.008,
+	StrategyShort:   0.008,
+	StrategyHold:    0.002,
+	TradeCommission: 0.001,
+
+	ShortMovingAverageLength:   50,
+	LongMovingAverageLength:    200,
+	LongRSILength:              14,
+	ShortRSILength:             5,
+	ShortMACDWindowLength:      12,
+	LongMACDWindowLength:       26,
+	MACDSignalWindow:           9,
+	FastShortMACDWindowLength:  5,
+	FastLongMACDWindowLength:   35,
+	FastMACDSignalWindow:       5,
+	BollingerBandsWindow:       20,
+	BollingerBandsMultiplier:   2.0,
+	StochasticOscillatorWindow: 14,
+	SlowATRPeriod:              14,
+	FastATRPeriod:              20,
+	OBVMovingAverageLength:     20,
+	VolumesMovingAverageLength: 20,
+	ChaikinMoneyFlowPeriod:     20,
+	MoneyFlowIndexPeriod:       14,
+	RateOfChangePeriod:         14,
+	CCIPeriod:                  20,
+	WilliamsRPeriod:            14,
+	PriceChangeFastPeriod:      60,
+	PriceChangeMediumPeriod:    240,
+	PriceChangeSlowPeriod:      1440,
+	RSIUpperBound:              50.0,
+	RSILowerBound:              50.0,
+}
+
+func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
 	features := [][]float64{}
 
 	if len(candles) <= params.WindowSize {
@@ -152,7 +217,7 @@ func PrepareForPrediction(candles []Candle, params GorgoniaParams) []float64 {
 }
 
 // Improved data preparation
-func Prepare(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]float64, []float64) {
+func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]float64, []float64) {
 	tracker := progress.Tracker{
 		Message: "Preparing data",
 		Total:   int64(len(candles)) + 5,
@@ -185,44 +250,44 @@ func Prepare(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]f
 
 	// Calculate base technical indicators
 	tracker.Message = "Calculating technical indicators"
-	ma50 := ta.MovingAverage(closes, 50)
-	ma200 := ta.MovingAverage(closes, 200)
-	rsi14 := ta.RSI(closes, 14)
-	rsi5 := ta.RSI(closes, 5) // Short-term RSI for quick movements
-	macd, macdSignal := ta.MACD(closes, 12, 26, 9)
-	macdFast, macdFastSignal := ta.MACD(closes, 5, 35, 5) // Faster MACD
-	ma20, bbUpper, bbLower := ta.BollingerBands(closes, 20, 2.0)
-	stochK, stochD := ta.StochasticOscillator(closes, lows, highs, 14)
+	ma50 := ta.MovingAverage(closes, params.ShortMovingAverageLength)                                                                           // 50
+	ma200 := ta.MovingAverage(closes, params.LongMovingAverageLength)                                                                           // 200
+	rsi14 := ta.RSI(closes, params.LongRSILength)                                                                                               // 14
+	rsi5 := ta.RSI(closes, params.ShortRSILength)                                                                                               // 5
+	macd, macdSignal := ta.MACD(closes, params.ShortMACDWindowLength, params.LongMACDWindowLength, params.MACDSignalWindow)                     // 12, 26, 9
+	macdFast, macdFastSignal := ta.MACD(closes, params.FastShortMACDWindowLength, params.FastLongMACDWindowLength, params.FastMACDSignalWindow) // 5, 35, 5
+	ma20, bbUpper, bbLower := ta.BollingerBands(closes, params.BollingerBandsWindow, params.BollingerBandsMultiplier)                           // 20, 2.0
+	stochK, stochD := ta.StochasticOscillator(closes, lows, highs, params.StochasticOscillatorWindow)                                           // 14
 	vwap := ta.VWAP(closes, volumes)
 	tracker.Increment(1)
 
 	// Additional technical indicators
 	tracker.Message = "Additional technical indicators"
-	atr14 := ta.ATR(highs, lows, closes, 14)
-	atr20 := ta.ATR(highs, lows, closes, 20)
+	atr14 := ta.ATR(highs, lows, closes, params.SlowATRPeriod) // 14
+	atr20 := ta.ATR(highs, lows, closes, params.FastATRPeriod) // 20
 	obv := ta.OBV(closes, volumes)
-	obvEma := ta.MovingAverage(obv, 20)
+	obvEma := ta.MovingAverage(obv, params.OBVMovingAverageLength) // 20
 	tracker.Increment(1)
 
 	// Volume indicators
 	tracker.Message = "Volume technical indicators"
-	vwma := ta.MovingAverage(volumes, 20)
-	cmf := ta.ChaikinMoneyFlow(highs, lows, closes, volumes, 20)
-	mfi := ta.MoneyFlowIndex(highs, lows, closes, volumes, 14)
+	vwma := ta.MovingAverage(volumes, params.VolumesMovingAverageLength)                    // 20
+	cmf := ta.ChaikinMoneyFlow(highs, lows, closes, volumes, params.ChaikinMoneyFlowPeriod) // 20
+	mfi := ta.MoneyFlowIndex(highs, lows, closes, volumes, params.MoneyFlowIndexPeriod)     // 14
 	tracker.Increment(1)
 
 	// Momentum indicators
 	tracker.Message = "Rate of change"
-	roc := ta.RateOfChange(closes, 14)
-	cci := ta.CCI(highs, lows, closes, 20)
-	williamsR := ta.WilliamsR(highs, lows, closes, 14)
+	roc := ta.RateOfChange(closes, params.RateOfChangePeriod)              // 14
+	cci := ta.CCI(highs, lows, closes, params.CCIPeriod)                   // 20
+	williamsR := ta.WilliamsR(highs, lows, closes, params.WilliamsRPeriod) // 14
 	tracker.Increment(1)
 
 	// Price changes over different timeframes
 	tracker.Message = "Price changes"
-	priceChange1h := ta.PriceChanges(closes, 60)
-	priceChange4h := ta.PriceChanges(closes, 240)
-	priceChange1d := ta.PriceChanges(closes, 1440)
+	priceChange1h := ta.PriceChanges(closes, params.PriceChangeFastPeriod)   // 60
+	priceChange4h := ta.PriceChanges(closes, params.PriceChangeMediumPeriod) // 240
+	priceChange1d := ta.PriceChanges(closes, params.PriceChangeSlowPeriod)   // 1440
 	tracker.Increment(1)
 
 	tracker.Message = "Feature extraction"
@@ -309,7 +374,7 @@ func Prepare(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]f
 		// Look ahead window
 		highestHigh := basePrice
 		lowestLow := basePrice
-		closingPrice := candles[i+5].Close
+		closingPrice := candles[i+params.StrategyCandles].Close
 
 		for j := 1; j <= params.StrategyCandles; j++ {
 			highestHigh = math.Max(highestHigh, candles[i+j].High)
@@ -322,10 +387,10 @@ func Prepare(pw progress.Writer, candles []Candle, params GorgoniaParams) ([][]f
 
 		// Enhanced signal generation with trend confirmation
 		if potentialGain >= params.StrategyLong && actualChange > 0 &&
-			rsi14[i] > 50 && macd[i] > macdSignal[i] {
+			rsi14[i] > params.RSIUpperBound && macd[i] > macdSignal[i] {
 			label = StrategyLong
 		} else if potentialLoss >= params.StrategyShort && actualChange < 0 &&
-			rsi14[i] < 50 && macd[i] < macdSignal[i] {
+			rsi14[i] < params.RSILowerBound && macd[i] < macdSignal[i] {
 			label = StrategyShort
 		}
 
