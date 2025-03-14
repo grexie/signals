@@ -340,7 +340,7 @@ func argmax(slice []float64) int {
 
 func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time, fetch bool) ([]float64, Strategy, error) {
 	if feature == nil {
-		from := now.Truncate(time.Minute).Add(-400 * time.Minute)
+		from := now.Truncate(time.Minute).Add(-time.Duration(WindowSize()*2) * time.Minute)
 		ctx, ch := market.FetchCandles(context.Background(), nil, nil, m.Instrument, from, now, market.CandleBar1m, fetch)
 
 		var candles []Candle

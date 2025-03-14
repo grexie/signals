@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -289,7 +290,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 
 		results := make(chan Strategy, popSize)
 		var wg sync.WaitGroup
-		numWorkers := 5 // Adjust based on available CPU cores
+		numWorkers := runtime.NumCPU() // Adjust based on available CPU cores
 		chunkSize := popSize / numWorkers
 
 		for i := 0; i < numWorkers; i++ {
