@@ -20,11 +20,11 @@ func BoundCandlesFloat64(v float64) float64 {
 }
 
 func BoundTakeProfit(v float64) float64 {
-	return math.Max(Commission()*2, math.Min(0.05, v)) // Default: 0.008
+	return math.Max(Commission()*2*Leverage(), math.Min(0.05*Leverage(), v)) // Default: 0.008*Leverage
 }
 
 func BoundStopLoss(v float64) float64 {
-	return math.Max(0.001, math.Min(0.01, v)) // Default: 0.002
+	return math.Max(0.001*Leverage(), math.Min(0.01*Leverage(), v)) // Default: 0.002*Leverage
 }
 
 // Moving Averages

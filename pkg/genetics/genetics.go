@@ -347,8 +347,8 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			{"SIGNALS_INSTRUMENT", strategy.Instrument},
 			{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%.0f", strategy.WindowSize)},
 			{"SIGNALS_CANDLES", fmt.Sprintf("%.0f", strategy.Candles)},
-			{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit*model.Leverage())},
-			{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss*model.Leverage())},
+			{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit)},
+			{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss)},
 		})
 		t.AppendSeparator()
 		t.AppendRows([]table.Row{

@@ -58,14 +58,10 @@ var (
 var (
 	TakeProfit = envFloat64("SIGNALS_TAKE_PROFIT", func() float64 {
 		return DefaultModelParams.StrategyLong * Leverage()
-	}, func(v float64) float64 {
-		return BoundTakeProfit(v/Leverage()) * Leverage()
-	})
+	}, BoundTakeProfit)
 	StopLoss = envFloat64("SIGNALS_STOP_LOSS", func() float64 {
 		return DefaultModelParams.StrategyHold * Leverage()
-	}, func(v float64) float64 {
-		return BoundStopLoss(v/Leverage()) * Leverage()
-	})
+	}, BoundStopLoss)
 	TradeMultiplier = envFloat64("SIGNALS_TRADE_MULTIPLIER", func() float64 {
 		return 1.0
 	}, func(v float64) float64 { return math.Max(0.5, math.Min(2, v)) })

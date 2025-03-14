@@ -79,7 +79,7 @@ func main() {
 	commission := model.Commission()
 
 	if len(os.Args) >= 2 && os.Args[1] == "optimize" {
-		NaturalSelection(db, instrument)
+		Optimize(db, instrument)
 		return
 	}
 
@@ -289,7 +289,7 @@ outer:
 	}
 }
 
-func NaturalSelection(db *leveldb.DB, instrument string) {
+func Optimize(db *leveldb.DB, instrument string) {
 	now := time.Now().Add(-5 * time.Minute)
 
 	pw := progress.NewWriter()
