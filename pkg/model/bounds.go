@@ -66,7 +66,15 @@ func BoundRSIUpperBound(v float64) float64 {
 }
 
 func BoundRSILowerBound(v float64) float64 {
-	return math.Max(20, math.Min(50, v)) // Default: 50
+	return math.Max(20, math.Min(60, v)) // Default: 50
+}
+
+func BoundRSISlope(v int) int {
+	return int(math.Max(1, math.Min(20, float64(v)))) // Default: 3
+}
+
+func BoundRSISlopeFloat64(v float64) float64 {
+	return math.Max(1, math.Min(20, v))
 }
 
 // MACD (Moving Average Convergence Divergence)

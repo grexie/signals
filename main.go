@@ -126,6 +126,7 @@ func main() {
 		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%d", model.PriceChangeSlowPeriod())},
 		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", model.RSIUpperBound())},
 		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", model.RSILowerBound())},
+		{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%d", model.RSISlope())},
 	})
 	t.Render()
 
@@ -162,7 +163,10 @@ func main() {
 outer:
 	for {
 		select {
-		case <-ch:
+		case _, ok := <-ch:
+			if !ok {
+				break outer
+			}
 		case <-ctx.Done():
 			if !errors.Is(ctx.Err(), context.Canceled) {
 				log.Fatalf("context error: %v", ctx.Err())
@@ -183,7 +187,7 @@ outer:
 		StrategyLong:               tp / leverage,
 		StrategyShort:              tp / leverage,
 		StrategyHold:               sl / leverage,
-		TradeCommission:            commission * leverage,
+		TradeCommission:            commission,
 		ShortMovingAverageLength:   model.ShortMovingAverageLength(),
 		LongMovingAverageLength:    model.LongMovingAverageLength(),
 		LongRSILength:              model.LongRSILength(),
@@ -211,6 +215,7 @@ outer:
 		PriceChangeSlowPeriod:      model.PriceChangeSlowPeriod(),
 		RSIUpperBound:              model.RSIUpperBound(),
 		RSILowerBound:              model.RSILowerBound(),
+		RSISlope:                   model.RSISlope(),
 	}
 
 	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, params, generationsDuration, generations); err != nil {
@@ -249,39 +254,45 @@ outer:
 				} else if equity, err := trade.GetEquity(context.Background()); err != nil {
 					log.Println(err)
 					continue
-				} else if votes[model.StrategyLong] > votes[model.StrategyShort] && positions.HasShort(instrument) {
-					for _, position := range positions.Short(instrument) {
-						log.Printf("closing position as more votes for long than short\n%s", position)
-						if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
-							log.Println(err)
+				} else {
+					if votes[model.StrategyLong] > votes[model.StrategyShort] && positions.HasShort(instrument) {
+						for _, position := range positions.Short(instrument) {
+							log.Printf("closing position as more votes for long than short\n%s", position)
+							if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
+								log.Println(err)
+							}
 						}
 					}
-				} else if votes[model.StrategyShort] > votes[model.StrategyLong] && positions.HasLong(instrument) {
-					for _, position := range positions.Long(instrument) {
-						log.Printf("closing position as more votes for short than long\n%s", position)
-						if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
-							log.Println(err)
+
+					if votes[model.StrategyShort] > votes[model.StrategyLong] && positions.HasLong(instrument) {
+						for _, position := range positions.Long(instrument) {
+							log.Printf("closing position as more votes for short than long\n%s", position)
+							if err := trade.ClosePosition(instrument, position.Margin, position.PositionSide); err != nil {
+								log.Println(err)
+							}
 						}
 					}
-				} else if notBefore.Before(time.Now()) {
-					switch strategy {
-					case model.StrategyLong:
-						if order, err := trade.PlaceOrder(context.Background(), instrument, true, equity, tp/tm, sl*tm, leverage); err != nil {
-							log.Println(err)
-							continue
-						} else {
-							log.Printf("placed LONG market order: %s %s", order.Instrument, order.OrderID)
-							notBefore = time.Now().Add(cooldown)
-							log.Printf("cooling down, next trade %s", notBefore)
-						}
-					case model.StrategyShort:
-						if order, err := trade.PlaceOrder(context.Background(), instrument, false, equity, tp/tm, sl*tm, leverage); err != nil {
-							log.Println(err)
-							continue
-						} else {
-							log.Printf("placed SHORT market order: %s %s", order.Instrument, order.OrderID)
-							notBefore = time.Now().Add(cooldown)
-							log.Printf("cooling down, next trade %s", notBefore)
+
+					if notBefore.Before(time.Now()) {
+						switch strategy {
+						case model.StrategyLong:
+							if order, err := trade.PlaceOrder(context.Background(), instrument, true, equity, tp/tm, sl*tm, leverage); err != nil {
+								log.Println(err)
+								continue
+							} else {
+								log.Printf("placed LONG market order: %s %s", order.Instrument, order.OrderID)
+								notBefore = time.Now().Add(cooldown)
+								log.Printf("cooling down, next trade %s", notBefore)
+							}
+						case model.StrategyShort:
+							if order, err := trade.PlaceOrder(context.Background(), instrument, false, equity, tp/tm, sl*tm, leverage); err != nil {
+								log.Println(err)
+								continue
+							} else {
+								log.Printf("placed SHORT market order: %s %s", order.Instrument, order.OrderID)
+								notBefore = time.Now().Add(cooldown)
+								log.Printf("cooling down, next trade %s", notBefore)
+							}
 						}
 					}
 				}
@@ -309,7 +320,10 @@ func Optimize(db *leveldb.DB, instrument string) {
 outer:
 	for {
 		select {
-		case <-ch:
+		case _, ok := <-ch:
+			if !ok {
+				break outer
+			}
 		case <-ctx.Done():
 			if !errors.Is(ctx.Err(), context.Canceled) {
 				log.Fatalf("context error: %v", ctx.Err())
@@ -363,6 +377,7 @@ outer:
 		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeSlowPeriod)},
 		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", strategy.RSIUpperBound)},
 		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", strategy.RSILowerBound)},
+		{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%0.0f", strategy.RSISlope)},
 	})
 	t.Render()
 	strategy.ModelMetrics.Write(os.Stdout)

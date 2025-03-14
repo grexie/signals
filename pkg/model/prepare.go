@@ -45,6 +45,7 @@ type ModelParams struct {
 	PriceChangeSlowPeriod      int
 	RSIUpperBound              float64
 	RSILowerBound              float64
+	RSISlope                   int
 }
 
 var DefaultModelParams = ModelParams{
@@ -82,6 +83,7 @@ var DefaultModelParams = ModelParams{
 	PriceChangeSlowPeriod:      1440,
 	RSIUpperBound:              50.0,
 	RSILowerBound:              50.0,
+	RSISlope:                   3,
 }
 
 func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
@@ -141,6 +143,8 @@ func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
 	// Feature extraction with sliding window
 	for i := params.WindowSize; i < len(candles); i++ {
 
+		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
+
 		// Base features
 		currentFeatures := []float64{
 			normalizeValue(closes[i], closes[i-params.WindowSize:i+1]),
@@ -148,6 +152,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
 			normalizeValue(ma200[i], ma200[i-params.WindowSize:i+1]),
 			rsi14[i] / 100.0,
 			rsi5[i] / 100.0, // Added short-term RSI
+			rsiSlope / 100.0,
 			normalizeValue(macd[i], macd[i-params.WindowSize:i+1]),
 			normalizeValue(macdSignal[i], macdSignal[i-params.WindowSize:i+1]),
 			normalizeValue(macdFast[i], macdFast[i-params.WindowSize:i+1]),
@@ -296,6 +301,8 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 	for i := params.WindowSize; i < len(candles)-params.StrategyCandles; i++ {
 		tracker.Increment(1)
 
+		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
+
 		// Base features
 		currentFeatures := []float64{
 			normalizeValue(closes[i], closes[i-params.WindowSize:i+1]),
@@ -303,6 +310,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 			normalizeValue(ma200[i], ma200[i-params.WindowSize:i+1]),
 			rsi14[i] / 100.0,
 			rsi5[i] / 100.0, // Added short-term RSI
+			rsiSlope / 100.0,
 			normalizeValue(macd[i], macd[i-params.WindowSize:i+1]),
 			normalizeValue(macdSignal[i], macdSignal[i-params.WindowSize:i+1]),
 			normalizeValue(macdFast[i], macdFast[i-params.WindowSize:i+1]),
@@ -386,11 +394,17 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		actualChange := (closingPrice - basePrice) / basePrice
 
 		// Enhanced signal generation with trend confirmation
-		if potentialGain >= params.StrategyLong && actualChange > 0 &&
-			rsi14[i] > params.RSIUpperBound && macd[i] > macdSignal[i] {
+		if potentialGain >= params.StrategyLong &&
+			actualChange > 0 &&
+			rsi14[i] > params.RSIUpperBound &&
+			rsiSlope > 0 &&
+			macd[i] > macdSignal[i] {
 			label = StrategyLong
-		} else if potentialLoss >= params.StrategyShort && actualChange < 0 &&
-			rsi14[i] < params.RSILowerBound && macd[i] < macdSignal[i] {
+		} else if potentialLoss >= params.StrategyShort &&
+			actualChange < 0 &&
+			rsi14[i] < params.RSILowerBound &&
+			rsiSlope < 0 &&
+			macd[i] < macdSignal[i] {
 			label = StrategyShort
 		}
 

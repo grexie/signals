@@ -80,7 +80,6 @@ func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instr
 
 	go func() {
 		defer close(out)
-		defer cancel(nil)
 
 		if db != nil {
 			tracker := &progress.Tracker{
@@ -88,7 +87,7 @@ func FetchCandles(ctx context.Context, pw progress.Writer, db *leveldb.DB, instr
 				Units:   progress.UnitsDefault,
 			}
 
-			iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("%s-%s-", instrument, "okx"))), nil)
+			iter := db.NewIterator(util.BytesPrefix(fmt.Appendf([]byte{}, "%s-%s-", instrument, "okx")), nil)
 			candles := []Candle{}
 			for iter.Next() {
 				var candle Candle
