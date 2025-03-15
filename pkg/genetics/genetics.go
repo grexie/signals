@@ -59,45 +59,81 @@ func randPercent(dev float64) float64 {
 	return 1 + (rand.Float64()*(2*dev)-dev)/100
 }
 
-// Generate a random strategy
-func randomStrategy(instrument string) Strategy {
+// Generate a strategy from configured values
+func newStrategy(instrument string) Strategy {
 	return Strategy{
 		Instrument: instrument,
 
-		WindowSize: model.BoundWindowSizeFloat64(float64(model.WindowSize()) * randPercent(25)),
-		Candles:    model.BoundCandlesFloat64(float64(model.Candles()) * randPercent(25)),
-		StopLoss:   model.BoundStopLoss(model.StopLoss() * randPercent(25)),
-		TakeProfit: model.BoundTakeProfit(model.TakeProfit() * randPercent(25)),
+		WindowSize: model.BoundWindowSizeFloat64(float64(model.WindowSize())),
+		Candles:    model.BoundCandlesFloat64(float64(model.Candles())),
+		StopLoss:   model.BoundStopLoss(model.StopLoss()),
+		TakeProfit: model.BoundTakeProfit(model.TakeProfit()),
 
-		ShortMovingAverageLength:   model.BoundShortMovingAverageLengthFloat64(float64(model.ShortMovingAverageLength()) * randPercent(25)),
-		LongMovingAverageLength:    model.BoundLongMovingAverageLengthFloat64(float64(model.LongMovingAverageLength()) * randPercent(25)),
-		LongRSILength:              model.BoundLongRSILengthFloat64(float64(model.LongRSILength()) * randPercent(25)),
-		ShortRSILength:             model.BoundShortRSILengthFloat64(float64(model.ShortRSILength()) * randPercent(25)),
-		ShortMACDWindowLength:      model.BoundShortMACDWindowLengthFloat64(float64(model.ShortMACDWindowLength()) * randPercent(25)),
-		LongMACDWindowLength:       model.BoundLongMACDWindowLengthFloat64(float64(model.LongMACDWindowLength()) * randPercent(25)),
-		MACDSignalWindow:           model.BoundMACDSignalWindowFloat64(float64(model.MACDSignalWindow()) * randPercent(25)),
-		FastShortMACDWindowLength:  model.BoundFastShortMACDWindowLengthFloat64(float64(model.FastShortMACDWindowLength()) * randPercent(25)),
-		FastLongMACDWindowLength:   model.BoundFastLongMACDWindowLengthFloat64(float64(model.FastLongMACDWindowLength()) * randPercent(25)),
-		FastMACDSignalWindow:       model.BoundFastMACDSignalWindowFloat64(float64(model.FastMACDSignalWindow()) * randPercent(25)),
-		BollingerBandsWindow:       model.BoundBollingerBandsWindowFloat64(float64(model.BollingerBandsWindow()) * randPercent(25)),
-		BollingerBandsMultiplier:   model.BoundBollingerBandsMultiplier(float64(model.BollingerBandsMultiplier()) * randPercent(25)),
-		StochasticOscillatorWindow: model.BoundStochasticOscillatorWindowFloat64(float64(model.StochasticOscillatorWindow()) * randPercent(25)),
-		SlowATRPeriod:              model.BoundSlowATRPeriodFloat64(float64(model.SlowATRPeriod()) * randPercent(25)),
-		FastATRPeriod:              model.BoundFastATRPeriodFloat64(float64(model.FastATRPeriod()) * randPercent(25)),
-		OBVMovingAverageLength:     model.BoundOBVMovingAverageLengthFloat64(float64(model.OBVMovingAverageLength()) * randPercent(25)),
-		VolumesMovingAverageLength: model.BoundVolumesMovingAverageLengthFloat64(float64(model.VolumesMovingAverageLength()) * randPercent(25)),
-		ChaikinMoneyFlowPeriod:     model.BoundChaikinMoneyFlowPeriodFloat64(float64(model.ChaikinMoneyFlowPeriod()) * randPercent(25)),
-		MoneyFlowIndexPeriod:       model.BoundMoneyFlowIndexPeriodFloat64(float64(model.MoneyFlowIndexPeriod()) * randPercent(25)),
-		RateOfChangePeriod:         model.BoundRateOfChangePeriodFloat64(float64(model.RateOfChangePeriod()) * randPercent(25)),
-		CCIPeriod:                  model.BoundCCIPeriodFloat64(float64(model.CCIPeriod()) * randPercent(25)),
-		WilliamsRPeriod:            model.BoundWilliamsRPeriodFloat64(float64(model.WilliamsRPeriod()) * randPercent(25)),
-		PriceChangeFastPeriod:      model.BoundPriceChangeFastPeriodFloat64(float64(model.PriceChangeFastPeriod()) * randPercent(25)),
-		PriceChangeMediumPeriod:    model.BoundPriceChangeMediumPeriodFloat64(float64(model.PriceChangeMediumPeriod()) * randPercent(25)),
-		PriceChangeSlowPeriod:      model.BoundPriceChangeSlowPeriodFloat64(float64(model.PriceChangeSlowPeriod()) * randPercent(25)),
-		RSIUpperBound:              model.BoundRSIUpperBound(float64(model.RSIUpperBound()) * randPercent(25)),
-		RSILowerBound:              model.BoundRSILowerBound(float64(model.RSILowerBound()) * randPercent(25)),
-		RSISlope:                   model.BoundRSISlopeFloat64(float64(model.RSISlope()) * randPercent(25)),
+		ShortMovingAverageLength:   model.BoundShortMovingAverageLengthFloat64(float64(model.ShortMovingAverageLength())),
+		LongMovingAverageLength:    model.BoundLongMovingAverageLengthFloat64(float64(model.LongMovingAverageLength())),
+		LongRSILength:              model.BoundLongRSILengthFloat64(float64(model.LongRSILength())),
+		ShortRSILength:             model.BoundShortRSILengthFloat64(float64(model.ShortRSILength())),
+		ShortMACDWindowLength:      model.BoundShortMACDWindowLengthFloat64(float64(model.ShortMACDWindowLength())),
+		LongMACDWindowLength:       model.BoundLongMACDWindowLengthFloat64(float64(model.LongMACDWindowLength())),
+		MACDSignalWindow:           model.BoundMACDSignalWindowFloat64(float64(model.MACDSignalWindow())),
+		FastShortMACDWindowLength:  model.BoundFastShortMACDWindowLengthFloat64(float64(model.FastShortMACDWindowLength())),
+		FastLongMACDWindowLength:   model.BoundFastLongMACDWindowLengthFloat64(float64(model.FastLongMACDWindowLength())),
+		FastMACDSignalWindow:       model.BoundFastMACDSignalWindowFloat64(float64(model.FastMACDSignalWindow())),
+		BollingerBandsWindow:       model.BoundBollingerBandsWindowFloat64(float64(model.BollingerBandsWindow())),
+		BollingerBandsMultiplier:   model.BoundBollingerBandsMultiplier(float64(model.BollingerBandsMultiplier())),
+		StochasticOscillatorWindow: model.BoundStochasticOscillatorWindowFloat64(float64(model.StochasticOscillatorWindow())),
+		SlowATRPeriod:              model.BoundSlowATRPeriodFloat64(float64(model.SlowATRPeriod())),
+		FastATRPeriod:              model.BoundFastATRPeriodFloat64(float64(model.FastATRPeriod())),
+		OBVMovingAverageLength:     model.BoundOBVMovingAverageLengthFloat64(float64(model.OBVMovingAverageLength())),
+		VolumesMovingAverageLength: model.BoundVolumesMovingAverageLengthFloat64(float64(model.VolumesMovingAverageLength())),
+		ChaikinMoneyFlowPeriod:     model.BoundChaikinMoneyFlowPeriodFloat64(float64(model.ChaikinMoneyFlowPeriod())),
+		MoneyFlowIndexPeriod:       model.BoundMoneyFlowIndexPeriodFloat64(float64(model.MoneyFlowIndexPeriod())),
+		RateOfChangePeriod:         model.BoundRateOfChangePeriodFloat64(float64(model.RateOfChangePeriod())),
+		CCIPeriod:                  model.BoundCCIPeriodFloat64(float64(model.CCIPeriod())),
+		WilliamsRPeriod:            model.BoundWilliamsRPeriodFloat64(float64(model.WilliamsRPeriod())),
+		PriceChangeFastPeriod:      model.BoundPriceChangeFastPeriodFloat64(float64(model.PriceChangeFastPeriod())),
+		PriceChangeMediumPeriod:    model.BoundPriceChangeMediumPeriodFloat64(float64(model.PriceChangeMediumPeriod())),
+		PriceChangeSlowPeriod:      model.BoundPriceChangeSlowPeriodFloat64(float64(model.PriceChangeSlowPeriod())),
+		RSIUpperBound:              model.BoundRSIUpperBound(float64(model.RSIUpperBound())),
+		RSILowerBound:              model.BoundRSILowerBound(float64(model.RSILowerBound())),
+		RSISlope:                   model.BoundRSISlopeFloat64(float64(model.RSISlope())),
 	}
+}
+
+func randomizeStrategy(s *Strategy, percent float64) {
+	s.WindowSize = model.BoundWindowSizeFloat64(s.WindowSize * randPercent(percent))
+	s.Candles = model.BoundCandlesFloat64(s.Candles * randPercent(percent))
+	s.TakeProfit = model.BoundTakeProfit(s.TakeProfit * randPercent(percent))
+	s.StopLoss = model.BoundStopLoss(s.StopLoss * randPercent(percent))
+
+	s.ShortMovingAverageLength = model.BoundShortMovingAverageLengthFloat64(s.ShortMovingAverageLength * randPercent(percent))
+	s.LongMovingAverageLength = model.BoundLongMovingAverageLengthFloat64(s.LongMovingAverageLength * randPercent(percent))
+	s.LongRSILength = model.BoundLongRSILengthFloat64(s.LongRSILength * randPercent(percent))
+	s.ShortRSILength = model.BoundShortRSILengthFloat64(s.ShortRSILength * randPercent(percent))
+	s.ShortMACDWindowLength = model.BoundShortMACDWindowLengthFloat64(s.ShortMACDWindowLength * randPercent(percent))
+	s.LongMACDWindowLength = model.BoundLongMACDWindowLengthFloat64(s.LongMACDWindowLength * randPercent(percent))
+	s.MACDSignalWindow = model.BoundMACDSignalWindowFloat64(s.MACDSignalWindow * randPercent(percent))
+	s.FastShortMACDWindowLength = model.BoundFastShortMACDWindowLengthFloat64(s.FastShortMACDWindowLength * randPercent(percent))
+	s.FastLongMACDWindowLength = model.BoundFastLongMACDWindowLengthFloat64(s.FastLongMACDWindowLength * randPercent(percent))
+	s.FastMACDSignalWindow = model.BoundFastMACDSignalWindowFloat64(s.FastMACDSignalWindow * randPercent(percent))
+	s.BollingerBandsWindow = model.BoundBollingerBandsWindowFloat64(s.BollingerBandsWindow * randPercent(percent))
+	s.BollingerBandsMultiplier = model.BoundBollingerBandsMultiplier(s.BollingerBandsMultiplier * randPercent(percent))
+	s.StochasticOscillatorWindow = model.BoundStochasticOscillatorWindowFloat64(s.StochasticOscillatorWindow * randPercent(percent))
+	s.SlowATRPeriod = model.BoundSlowATRPeriodFloat64(s.SlowATRPeriod * randPercent(percent))
+	s.FastATRPeriod = model.BoundFastATRPeriodFloat64(s.FastATRPeriod * randPercent(percent))
+	s.OBVMovingAverageLength = model.BoundOBVMovingAverageLengthFloat64(s.OBVMovingAverageLength * randPercent(percent))
+	s.VolumesMovingAverageLength = model.BoundVolumesMovingAverageLengthFloat64(s.VolumesMovingAverageLength * randPercent(percent))
+	s.ChaikinMoneyFlowPeriod = model.BoundChaikinMoneyFlowPeriodFloat64(s.ChaikinMoneyFlowPeriod * randPercent(percent))
+	s.MoneyFlowIndexPeriod = model.BoundMoneyFlowIndexPeriodFloat64(s.MoneyFlowIndexPeriod * randPercent(percent))
+	s.RateOfChangePeriod = model.BoundRateOfChangePeriodFloat64(s.RateOfChangePeriod * randPercent(percent))
+	s.CCIPeriod = model.BoundCCIPeriodFloat64(s.CCIPeriod * randPercent(percent))
+	s.WilliamsRPeriod = model.BoundWilliamsRPeriodFloat64(s.WilliamsRPeriod * randPercent(percent))
+	s.PriceChangeFastPeriod = model.BoundPriceChangeFastPeriodFloat64(s.PriceChangeFastPeriod * randPercent(percent))
+	s.PriceChangeMediumPeriod = model.BoundPriceChangeMediumPeriodFloat64(s.PriceChangeMediumPeriod * randPercent(percent))
+	s.PriceChangeSlowPeriod = model.BoundPriceChangeSlowPeriodFloat64(s.PriceChangeSlowPeriod * randPercent(percent))
+	s.RSIUpperBound = model.BoundRSIUpperBound(s.RSIUpperBound * randPercent(percent))
+	s.RSILowerBound = model.BoundRSILowerBound(s.RSILowerBound * randPercent(percent))
+	s.RSISlope = model.BoundRSISlopeFloat64(s.RSISlope * randPercent(percent))
 }
 
 // Evaluate fitness by composing a new model from the strategy
@@ -216,39 +252,7 @@ func crossover(parent1, parent2 Strategy) Strategy {
 // Mutation (Introduce small variations)
 func mutate(s *Strategy, mutationRate float64) {
 	if rand.Float64() < mutationRate {
-		s.WindowSize = model.BoundWindowSizeFloat64(s.WindowSize * randPercent(5))
-		s.Candles = model.BoundCandlesFloat64(s.Candles * randPercent(5))
-		s.TakeProfit = model.BoundTakeProfit(s.TakeProfit * randPercent(5))
-		s.StopLoss = model.BoundStopLoss(s.StopLoss * randPercent(5))
-
-		s.ShortMovingAverageLength = model.BoundShortMovingAverageLengthFloat64(s.ShortMovingAverageLength * randPercent(5))
-		s.LongMovingAverageLength = model.BoundLongMovingAverageLengthFloat64(s.LongMovingAverageLength * randPercent(5))
-		s.LongRSILength = model.BoundLongRSILengthFloat64(s.LongRSILength * randPercent(5))
-		s.ShortRSILength = model.BoundShortRSILengthFloat64(s.ShortRSILength * randPercent(5))
-		s.ShortMACDWindowLength = model.BoundShortMACDWindowLengthFloat64(s.ShortMACDWindowLength * randPercent(5))
-		s.LongMACDWindowLength = model.BoundLongMACDWindowLengthFloat64(s.LongMACDWindowLength * randPercent(5))
-		s.MACDSignalWindow = model.BoundMACDSignalWindowFloat64(s.MACDSignalWindow * randPercent(5))
-		s.FastShortMACDWindowLength = model.BoundFastShortMACDWindowLengthFloat64(s.FastShortMACDWindowLength * randPercent(5))
-		s.FastLongMACDWindowLength = model.BoundFastLongMACDWindowLengthFloat64(s.FastLongMACDWindowLength * randPercent(5))
-		s.FastMACDSignalWindow = model.BoundFastMACDSignalWindowFloat64(s.FastMACDSignalWindow * randPercent(5))
-		s.BollingerBandsWindow = model.BoundBollingerBandsWindowFloat64(s.BollingerBandsWindow * randPercent(5))
-		s.BollingerBandsMultiplier = model.BoundBollingerBandsMultiplier(s.BollingerBandsMultiplier * randPercent(5))
-		s.StochasticOscillatorWindow = model.BoundStochasticOscillatorWindowFloat64(s.StochasticOscillatorWindow * randPercent(5))
-		s.SlowATRPeriod = model.BoundSlowATRPeriodFloat64(s.SlowATRPeriod * randPercent(5))
-		s.FastATRPeriod = model.BoundFastATRPeriodFloat64(s.FastATRPeriod * randPercent(5))
-		s.OBVMovingAverageLength = model.BoundOBVMovingAverageLengthFloat64(s.OBVMovingAverageLength * randPercent(5))
-		s.VolumesMovingAverageLength = model.BoundVolumesMovingAverageLengthFloat64(s.VolumesMovingAverageLength * randPercent(5))
-		s.ChaikinMoneyFlowPeriod = model.BoundChaikinMoneyFlowPeriodFloat64(s.ChaikinMoneyFlowPeriod * randPercent(5))
-		s.MoneyFlowIndexPeriod = model.BoundMoneyFlowIndexPeriodFloat64(s.MoneyFlowIndexPeriod * randPercent(5))
-		s.RateOfChangePeriod = model.BoundRateOfChangePeriodFloat64(s.RateOfChangePeriod * randPercent(5))
-		s.CCIPeriod = model.BoundCCIPeriodFloat64(s.CCIPeriod * randPercent(5))
-		s.WilliamsRPeriod = model.BoundWilliamsRPeriodFloat64(s.WilliamsRPeriod * randPercent(5))
-		s.PriceChangeFastPeriod = model.BoundPriceChangeFastPeriodFloat64(s.PriceChangeFastPeriod * randPercent(5))
-		s.PriceChangeMediumPeriod = model.BoundPriceChangeMediumPeriodFloat64(s.PriceChangeMediumPeriod * randPercent(5))
-		s.PriceChangeSlowPeriod = model.BoundPriceChangeSlowPeriodFloat64(s.PriceChangeSlowPeriod * randPercent(5))
-		s.RSIUpperBound = model.BoundRSIUpperBound(s.RSIUpperBound * randPercent(5))
-		s.RSILowerBound = model.BoundRSILowerBound(s.RSILowerBound * randPercent(5))
-		s.RSISlope = model.BoundRSISlopeFloat64(s.RSISlope * randPercent(5))
+		randomizeStrategy(s, 5)
 	}
 }
 
@@ -266,8 +270,10 @@ func worker(ctx context.Context, db *leveldb.DB, pw progress.Writer, tracker *pr
 func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize, generations int, retainRate, mutationRate float64) Strategy {
 	// Initialize random population
 	population := make([]Strategy, popSize)
-	for i := range population {
-		population[i] = randomStrategy(instrument)
+	population[0] = newStrategy(instrument)
+	for i := 1; i < popSize; i++ {
+		population[i] = newStrategy(instrument)
+		randomizeStrategy(&population[i], 25)
 	}
 
 	for gen := range generations {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"gonum.org/v1/gonum/stat"
 )
 
 // PaperTrader simulates trades based on model predictions
@@ -223,4 +225,36 @@ func (p *PaperTrader) SharpeRatio(riskFreeRate float64) float64 {
 
 	// Sharpe Ratio Formula
 	return (meanReturn - riskFreeRate) / stdDev
+}
+
+func (p *PaperTrader) SortinoRatio(riskFreeRate float64) float64 {
+	if len(p.ClosedTrades) == 0 {
+		return 0
+	}
+
+	returns := []float64{}
+	negReturns := []float64{}
+	for _, trade := range p.ClosedTrades {
+		if *trade.PercentageReturn < 0 {
+			negReturns = append(negReturns, *trade.PercentageReturn)
+		}
+		returns = append(returns, *trade.PercentageReturn)
+	}
+
+	if len(negReturns) == 0 {
+		return math.Inf(1)
+	}
+
+	meanReturn := stat.Mean(returns, nil)
+
+	// Compute standard deviation of returns
+	downsideDeviation := stat.StdDev(negReturns, nil)
+
+	// Avoid divide-by-zero error
+	if downsideDeviation == 0 {
+		return 0
+	}
+
+	// Sharpe Ratio Formula
+	return (meanReturn - riskFreeRate) / downsideDeviation
 }

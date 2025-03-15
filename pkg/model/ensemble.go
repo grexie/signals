@@ -112,9 +112,9 @@ func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument
 	}
 }
 
-type StrategyVotes map[Strategy]int
+type StrategyVotes map[Strategy]float64
 
-func (e *EnsembleModel) Predict(ctx context.Context, now time.Time) (Strategy, StrategyVotes, error) {
+func (e *EnsembleModel) Predict(pw progress.Writer, now time.Time) (Strategy, StrategyVotes, error) {
 	e.mutex.Lock()
 	models := append([]*Model{}, e.Models...)
 	e.mutex.Unlock()
@@ -123,13 +123,16 @@ func (e *EnsembleModel) Predict(ctx context.Context, now time.Time) (Strategy, S
 
 	feature := []float64(nil)
 	for _, m := range models {
-		f, s, err := m.Predict(ctx, feature, now, true)
+		f, prediction, err := m.Predict(pw, feature, now, true)
 		if err != nil {
 			return StrategyHold, votes, err
 		}
 		feature = f
 
-		votes.Vote(s)
+		weight := m.Metrics.SharpeRatio*5 + m.Metrics.SortinoRatio*10
+		for s, v := range prediction {
+			votes.Vote(s, v*weight)
+		}
 	}
 
 	return votes.Strategy(), votes, nil
@@ -144,7 +147,7 @@ func NewStrategyVotes() StrategyVotes {
 }
 
 func (s StrategyVotes) Strategy() Strategy {
-	maxVotes := 0
+	maxVotes := float64(0)
 	maxVotesStrategy := StrategyHold
 	for s, v := range s {
 		if maxVotes < v {
@@ -155,8 +158,8 @@ func (s StrategyVotes) Strategy() Strategy {
 	return maxVotesStrategy
 }
 
-func (s StrategyVotes) Vote(strategy Strategy) {
-	s[strategy]++
+func (s StrategyVotes) Vote(strategy Strategy, votes float64) {
+	s[strategy] += votes
 }
 
 func (s StrategyVotes) String() string {

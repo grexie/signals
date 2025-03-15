@@ -1,5 +1,5 @@
 package model
 
-import "github.com/grexie/signals/pkg/market"
+import "github.com/grexie/signals/pkg/candles"
 
-type Candle = market.Candle
+type Candle = candles.Candle

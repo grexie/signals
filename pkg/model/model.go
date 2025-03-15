@@ -2,7 +2,6 @@ package model
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grexie/signals/pkg/market"
+	"github.com/grexie/signals/pkg/candles"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -114,25 +113,18 @@ type ModelMetrics struct {
 
 	Samples []int
 
-	PnL         float64
-	MaxDrawdown float64
-	SharpeRatio float64
-	Trades      int
+	PnL          float64
+	MaxDrawdown  float64
+	SharpeRatio  float64
+	SortinoRatio float64
+	Trades       int
 }
 
 func (m *ModelMetrics) Fitness() float64 {
-	// Normalize PnL: Assume PnL ranges from -100% to +Inf%
-	normalizedPnL := (m.PnL + 100) / 2 // Shifts range from [-100,Inf) to [0,Inf)
-
-	// Normalize Max Drawdown (100% is worst, 0% is best)
-	normalizedDrawdown := 100 - m.MaxDrawdown // Invert drawdown
-
-	// Average F1 Score
 	avgF1 := (m.F1Scores[0] + m.F1Scores[1] + m.F1Scores[2]) / 3
+	drawdownPenalty := 1 / (1 + m.MaxDrawdown/100) // Penalizes high drawdowns
 
-	// Weighted fitness score
-	fitness := (avgF1 * 0.2) + (normalizedDrawdown * 0.2) + (normalizedPnL * 0.4) + (m.SharpeRatio * 0.2)
-
+	fitness := (avgF1*0.15 + m.SortinoRatio*0.3 + m.SharpeRatio*0.2 + m.PnL*0.15) * drawdownPenalty
 	return fitness
 }
 
@@ -202,6 +194,7 @@ func (m ModelMetrics) Write(w io.Writer) error {
 		{"PnL", fmt.Sprintf("%6.2f%%", m.PnL)},
 		{"Max Drawdown", fmt.Sprintf("%6.2f%%", m.MaxDrawdown)},
 		{"Sharpe Ratio", fmt.Sprintf("%6.2f", m.SharpeRatio)},
+		{"Sortino Ratio", fmt.Sprintf("%6.2f", m.SortinoRatio)},
 		{"Trades", fmt.Sprintf("%d", m.Trades)},
 	})
 	t.Render()
@@ -275,24 +268,7 @@ func calculateMetrics(confusionMatrix [][]int, total int) ModelMetrics {
 }
 
 func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, params ModelParams, from time.Time, to time.Time, fetch bool) (*Model, error) {
-	ctx, ch := market.FetchCandles(ctx, pw, db, instrument, from.Truncate(time.Minute), to.Truncate(time.Minute), market.CandleBar1m, fetch)
-
-	var candles []Candle
-outer:
-	for {
-		select {
-		case candle, ok := <-ch:
-			if !ok {
-				break outer
-			}
-			candles = append(candles, candle)
-		case <-ctx.Done():
-			if !errors.Is(ctx.Err(), context.Canceled) {
-				return nil, fmt.Errorf("context error: %v", ctx.Err())
-			}
-			break outer
-		}
-	}
+	candles := candles.GetCandles(db, pw, instrument, candles.OKX, from, to)
 
 	if len(candles) == 0 {
 		return nil, fmt.Errorf("no candle data received")
@@ -425,36 +401,23 @@ func argmax(slice []float64) int {
 	return maxIndex
 }
 
-func (m *Model) Predict(ctx context.Context, feature []float64, now time.Time, fetch bool) ([]float64, Strategy, error) {
+type Prediction map[Strategy]float64
+
+func (m *Model) Predict(pw progress.Writer, feature []float64, now time.Time, fetch bool) ([]float64, Prediction, error) {
 	if feature == nil {
 		from := now.Truncate(time.Minute).Add(-time.Duration(WindowSize()*2) * time.Minute)
-		ctx, ch := market.FetchCandles(context.Background(), nil, nil, m.Instrument, from, now, market.CandleBar1m, fetch)
-
-		var candles []Candle
-	outer:
-		for {
-			select {
-			case candle, ok := <-ch:
-				if !ok {
-					break outer
-				}
-				candles = append(candles, candle)
-			case <-ctx.Done():
-				if !errors.Is(ctx.Err(), context.Canceled) {
-					return nil, StrategyHold, fmt.Errorf("context error: %v", ctx.Err())
-				}
-				break outer
-			}
-		}
-
+		candles := candles.GetCandles(m.db, pw, m.Instrument, candles.OKX, from, now)
 		feature = PrepareForPrediction(candles, m.params)
 	}
 
 	pred, err := Predict(m.weights, feature)
 	if err != nil {
-		return nil, StrategyHold, err
+		return nil, nil, err
 	}
 
-	predictedClass := argmax(pred)
-	return feature, Strategy(predictedClass), nil
+	prediction := Prediction{}
+	for i := range 3 {
+		prediction[Strategy(i)] = pred[i]
+	}
+	return feature, prediction, nil
 }

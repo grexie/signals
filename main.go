@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/grexie/signals/pkg/genetics"
-	"github.com/grexie/signals/pkg/market"
 	"github.com/grexie/signals/pkg/model"
 	"github.com/grexie/signals/pkg/trade"
 	"github.com/jedib0t/go-pretty/v6/progress"
@@ -158,27 +156,6 @@ func main() {
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
 
-	now := time.Now()
-	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m, true)
-outer:
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				break outer
-			}
-		case <-ctx.Done():
-			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Fatalf("context error: %v", ctx.Err())
-			}
-			break outer
-		}
-	}
-	pw.Stop()
-	for pw.IsRenderInProgress() {
-		time.Sleep(100 * time.Millisecond)
-	}
-
 	notBefore := time.Time{}
 
 	params := model.ModelParams{
@@ -225,7 +202,7 @@ outer:
 		for {
 			nextTime := time.Now().Add(1 * time.Minute).Truncate(time.Minute)
 			<-time.After(time.Until(nextTime))
-			if strategy, votes, err := m.Predict(context.Background(), nextTime); err != nil {
+			if strategy, votes, err := m.Predict(nil, nextTime); err != nil {
 				log.Println(err)
 				continue
 			} else {
@@ -315,26 +292,6 @@ func Optimize(db *leveldb.DB, instrument string) {
 	pw.Style().Colors = progress.StyleColorsExample
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
-
-	ctx, ch := market.FetchCandles(context.Background(), pw, db, instrument, now.AddDate(0, -1, -2), now, market.CandleBar1m, true)
-outer:
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				break outer
-			}
-		case <-ctx.Done():
-			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Fatalf("context error: %v", ctx.Err())
-			}
-			break outer
-		}
-	}
-	pw.Stop()
-	for pw.IsRenderInProgress() {
-		time.Sleep(100 * time.Millisecond)
-	}
 
 	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.4, 0.1)
 
