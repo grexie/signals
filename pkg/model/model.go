@@ -150,7 +150,7 @@ func (m *ModelMetrics) Fitness() float64 {
 	riskRewardFactor := math.Tanh((safeValue(m.Backtest.Mean.PnL, 0) / math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1)) * 0.1)
 
 	// Apply PnL Penalty to Encourage Profitability
-	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/10))
+	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/4))
 
 	// Compute base fitness
 	fitness := avgF1*0.15 + sortino*0.3 + sharpe*0.2 + normPnL*0.15
