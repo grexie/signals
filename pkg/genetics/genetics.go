@@ -25,6 +25,8 @@ type Strategy struct {
 	TakeProfit float64
 	StopLoss   float64
 
+	MinTradeProbability float64
+
 	ShortMovingAverageLength   float64
 	LongMovingAverageLength    float64
 	LongRSILength              float64
@@ -75,6 +77,8 @@ func newStrategy(instrument string) Strategy {
 		StopLoss:   model.BoundStopLoss(model.StopLoss()),
 		TakeProfit: model.BoundTakeProfit(model.TakeProfit()),
 
+		MinTradeProbability: model.BoundMinTradeProbability(model.MinTradeProbability()),
+
 		ShortMovingAverageLength:   model.BoundShortMovingAverageLengthFloat64(float64(model.ShortMovingAverageLength())),
 		LongMovingAverageLength:    model.BoundLongMovingAverageLengthFloat64(float64(model.LongMovingAverageLength())),
 		LongRSILength:              model.BoundLongRSILengthFloat64(float64(model.LongRSILength())),
@@ -115,6 +119,8 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.Candles = model.BoundCandlesFloat64(s.Candles * randPercent(percent))
 	s.TakeProfit = model.BoundTakeProfit(s.TakeProfit * randPercent(percent))
 	s.StopLoss = model.BoundStopLoss(s.StopLoss * randPercent(percent))
+
+	s.MinTradeProbability = model.BoundMinTradeProbability(s.MinTradeProbability * randPercent(percent))
 
 	s.ShortMovingAverageLength = model.BoundShortMovingAverageLengthFloat64(s.ShortMovingAverageLength * randPercent(percent))
 	s.LongMovingAverageLength = model.BoundLongMovingAverageLengthFloat64(s.LongMovingAverageLength * randPercent(percent))
@@ -162,6 +168,8 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		Candles:    int(s.Candles),
 		TakeProfit: s.TakeProfit / model.Leverage(),
 		StopLoss:   s.StopLoss / model.Leverage(),
+
+		MinTradeProbability: s.MinTradeProbability,
 
 		ShortMovingAverageLength:   int(s.ShortMovingAverageLength),
 		LongMovingAverageLength:    int(s.LongMovingAverageLength),
@@ -265,11 +273,15 @@ func crossover(parent1, parent2 Strategy) Strategy {
 	}
 
 	return Strategy{
-		Instrument:                 parent1.Instrument,
-		WindowSize:                 selectValue(parent1.WindowSize, parent2.WindowSize),
-		Candles:                    selectValue(parent1.Candles, parent2.Candles),
-		TakeProfit:                 selectValue(parent1.TakeProfit, parent2.TakeProfit),
-		StopLoss:                   selectValue(parent1.StopLoss, parent2.StopLoss),
+		Instrument: parent1.Instrument,
+
+		WindowSize: selectValue(parent1.WindowSize, parent2.WindowSize),
+		Candles:    selectValue(parent1.Candles, parent2.Candles),
+		TakeProfit: selectValue(parent1.TakeProfit, parent2.TakeProfit),
+		StopLoss:   selectValue(parent1.StopLoss, parent2.StopLoss),
+
+		MinTradeProbability: selectValue(parent1.MinTradeProbability, parent2.MinTradeProbability),
+
 		ShortMovingAverageLength:   selectValue(parent1.ShortMovingAverageLength, parent2.ShortMovingAverageLength),
 		LongMovingAverageLength:    selectValue(parent1.LongMovingAverageLength, parent2.LongMovingAverageLength),
 		LongRSILength:              selectValue(parent1.LongRSILength, parent2.LongRSILength),

@@ -40,8 +40,13 @@ func (m *Model) Backtest(pw progress.Writer, iterate func(), instrument string, 
 				return StrategyHold
 			}
 
-			prediction := argmax(pred)
-			return Strategy(prediction)
+			if pred[1] >= params.MinTradeProbability && pred[2] < params.MinTradeProbability {
+				return StrategyLong
+			} else if pred[2] >= params.MinTradeProbability && pred[1] < params.MinTradeProbability {
+				return StrategyShort
+			} else {
+				return StrategyHold
+			}
 		})
 		if iterate != nil {
 			iterate()

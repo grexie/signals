@@ -26,6 +26,8 @@ type ModelParams struct {
 	Commission      float64
 	Cooldown        time.Duration
 
+	MinTradeProbability float64
+
 	ShortMovingAverageLength   int
 	LongMovingAverageLength    int
 	LongRSILength              int
@@ -75,6 +77,8 @@ func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
 		fmt.Sprintf("SIGNALS_CANDLES=%d", m.Candles),
 		fmt.Sprintf("SIGNALS_TAKE_PROFIT=%0.04f", m.TakeProfit*m.Leverage),
 		fmt.Sprintf("SIGNALS_STOP_LOSS=%0.04f", m.StopLoss*m.Leverage),
+		"",
+		fmt.Sprintf("SIGNALS_MIN_TRADE_PROBABILITY=%0.04f", m.MinTradeProbability),
 		"",
 		fmt.Sprintf("SIGNALS_L2_PENALTY=%.06f", m.L2Penalty),
 		fmt.Sprintf("SIGNALS_DROPOUT_RATE=%.06f", m.DropoutRate),
@@ -150,6 +154,8 @@ func NewModelParamsFromDefaults() ModelParams {
 		TradeMultiplier: TradeMultiplier(),
 		Commission:      Commission(),
 		Cooldown:        Cooldown(),
+
+		MinTradeProbability: MinTradeProbability(),
 
 		ShortMovingAverageLength:   ShortMovingAverageLength(),
 		LongMovingAverageLength:    LongMovingAverageLength(),
@@ -268,6 +274,12 @@ var (
 	Commission = envFloat64("SIGNALS_COMMISSION", func() float64 {
 		return 0.001
 	}, func(v float64) float64 { return math.Max(0, math.Min(0.5, v)) })
+)
+
+var (
+	MinTradeProbability = envFloat64("MIN_TRADE_PROBABILITY", func() float64 {
+		return 0.5
+	}, BoundMinTradeProbability)
 )
 
 var (
