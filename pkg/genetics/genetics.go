@@ -150,17 +150,16 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.LearnRate = model.BoundLearnRate(s.LearnRate * randPercent(percent))
 }
 
-// Evaluate fitness by composing a new model from the strategy
-func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, now time.Time, s Strategy) *model.ModelMetrics {
-	leverage := model.Leverage()
-	commission := model.Commission()
-	params := model.ModelParams{
-		WindowSize:      int(s.WindowSize),
-		StrategyCandles: int(s.Candles),
-		StrategyLong:    s.TakeProfit / leverage,
-		StrategyShort:   s.TakeProfit / leverage,
-		StrategyHold:    s.StopLoss / leverage,
-		TradeCommission: commission,
+func StrategyToParams(s Strategy) model.ModelParams {
+	return model.ModelParams{
+		Instrument: model.Instrument(),
+		Cooldown:   model.Cooldown(),
+
+		WindowSize: int(s.WindowSize),
+		Candles:    int(s.Candles),
+		TakeProfit: s.TakeProfit / model.Leverage(),
+		StopLoss:   s.StopLoss / model.Leverage(),
+		Commission: model.Commission(),
 
 		ShortMovingAverageLength:   int(s.ShortMovingAverageLength),
 		LongMovingAverageLength:    int(s.LongMovingAverageLength),
@@ -195,6 +194,11 @@ func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, no
 		DropoutRate: s.DropoutRate,
 		LearnRate:   s.LearnRate,
 	}
+}
+
+// Evaluate fitness by composing a new model from the strategy
+func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, now time.Time, s Strategy) *model.ModelMetrics {
+	params := StrategyToParams(s)
 
 	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now.AddDate(0, -1, 0), now, false); err != nil {
 		return &model.ModelMetrics{}
@@ -412,62 +416,15 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
-		t.SetTitle(fmt.Sprintf("Generation %d", gen))
-		t.AppendRows([]table.Row{
-			{"SIGNALS_INSTRUMENT", strategy.Instrument},
-			{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%.0f", strategy.WindowSize)},
-			{"SIGNALS_CANDLES", fmt.Sprintf("%.0f", strategy.Candles)},
-			{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit)},
-			{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss)},
-		})
-		t.AppendSeparator()
-		t.AppendRows([]table.Row{
-			{"SIGNALS_L2_PENALTY", fmt.Sprintf("%.06f", strategy.L2Penalty)},
-			{"SIGNALS_DROPOUT_RATE", fmt.Sprintf("%.06f", strategy.DropoutRate)},
-			{"SIGNALS_LEARN_RATE", fmt.Sprintf("%.06f", strategy.LearnRate)},
-		})
-		t.AppendSeparator()
-		t.AppendRows([]table.Row{
-			{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMovingAverageLength)},
-			{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMovingAverageLength)},
-			{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.LongRSILength)},
-			{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortRSILength)},
-			{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMACDWindowLength)},
-			{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMACDWindowLength)},
-			{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.MACDSignalWindow)},
-			{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastShortMACDWindowLength)},
-			{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastLongMACDWindowLength)},
-			{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.FastMACDSignalWindow)},
-			{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%0.0f", strategy.BollingerBandsWindow)},
-			{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", strategy.BollingerBandsMultiplier)},
-			{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%0.0f", strategy.StochasticOscillatorWindow)},
-			{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.SlowATRPeriod)},
-			{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.FastATRPeriod)},
-			{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.OBVMovingAverageLength)},
-			{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.VolumesMovingAverageLength)},
-			{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.ChaikinMoneyFlowPeriod)},
-			{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%0.0f", strategy.MoneyFlowIndexPeriod)},
-			{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.RateOfChangePeriod)},
-			{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%0.0f", strategy.CCIPeriod)},
-			{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%0.0f", strategy.WilliamsRPeriod)},
-			{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeFastPeriod)},
-			{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeMediumPeriod)},
-			{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeSlowPeriod)},
-			{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", strategy.RSIUpperBound)},
-			{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", strategy.RSILowerBound)},
-			{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%0.0f", strategy.RSISlope)},
-		})
-		t.Render()
-
-		t = table.NewWriter()
-		t.SetOutputMirror(os.Stdout)
 		t.SetTitle(fmt.Sprintf("Generation %d - Summary", gen))
 		t.AppendHeader(table.Row{"", "MEAN", "STDDEV"})
 		t.AppendRows([]table.Row{
-			{"Fitness", fmt.Sprintf("%0.08f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.08f", stat.StdDev(fitnesses, nil))},
+			{"Fitness", fmt.Sprintf("%0.10f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.10f", stat.StdDev(fitnesses, nil))},
 		})
 		t.Render()
 
+		params := StrategyToParams(strategy)
+		params.Write(os.Stdout, fmt.Sprintf("Generation %d - Best Strategy", gen))
 		strategy.ModelMetrics.Write(os.Stdout)
 	}
 

@@ -47,21 +47,50 @@ func envFloat64(name string, def func() float64, dec func(v float64) float64) fu
 	}
 }
 
+func envString(name string, def func() string) func() string {
+	return func() string {
+		value := def()
+		if v, ok := os.LookupEnv(name); ok {
+			value = v
+		}
+		return value
+	}
+}
+
+func envDuration(name string, def func() time.Duration) func() time.Duration {
+	return func() time.Duration {
+		value := def()
+		if v, ok := os.LookupEnv(name); ok {
+			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
+				log.Fatalf("failed to parse env.%s: %v", name, err)
+			} else {
+				value = time.Duration(v) * time.Second
+			}
+		}
+		return value
+	}
+}
+
+var (
+	Instrument = envString("SIGNALS_INSTRUMENT", func() string { return "DOGE-USDT-SWAP" })
+	Cooldown   = envDuration("SIGNALS_COOLDOWN", func() time.Duration { return 5 * time.Minute })
+)
+
 var (
 	WindowSize = envInt("SIGNALS_WINDOW_SIZE", func() int {
-		return DefaultModelParams.WindowSize
+		return 200
 	}, BoundWindowSize)
 	Candles = envInt("SIGNALS_CANDLES", func() int {
-		return DefaultModelParams.StrategyCandles
+		return 5
 	}, BoundCandles)
 )
 
 var (
 	TakeProfit = envFloat64("SIGNALS_TAKE_PROFIT", func() float64 {
-		return DefaultModelParams.StrategyLong * Leverage()
+		return 0.4
 	}, BoundTakeProfit)
 	StopLoss = envFloat64("SIGNALS_STOP_LOSS", func() float64 {
-		return DefaultModelParams.StrategyHold * Leverage()
+		return 0.1
 	}, BoundStopLoss)
 	TradeMultiplier = envFloat64("SIGNALS_TRADE_MULTIPLIER", func() float64 {
 		return 1.0
@@ -70,7 +99,7 @@ var (
 		return 50.0
 	}, func(v float64) float64 { return math.Max(1, math.Min(100, v)) })
 	Commission = envFloat64("SIGNALS_COMMISSION", func() float64 {
-		return DefaultModelParams.TradeCommission
+		return 0.001
 	}, func(v float64) float64 { return math.Max(0, math.Min(0.5, v)) })
 )
 
@@ -344,7 +373,7 @@ func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrumen
 	}
 
 	// Ensure we have enough candle data (at least 200 window + 5 for prediction)
-	required := params.WindowSize + params.StrategyCandles
+	required := params.WindowSize + params.Candles
 	if len(candles) < required {
 		return nil, fmt.Errorf("insufficient candle data: need at least %d candles, got %d", required, len(candles))
 	}
@@ -477,7 +506,7 @@ func (m *Model) Backtest(pw progress.Writer, iterate func(), instrument string, 
 	}
 
 	features := PrepareForPrediction(candles, params)
-	trader := NewPaperTrader(10000, params.StrategyHold, params.StrategyLong, params.TradeCommission/2, Leverage())
+	trader := NewPaperTrader(10000, params.StopLoss, params.TakeProfit, params.Commission/2, Leverage())
 
 	for i := params.WindowSize; i < len(candles); i++ {
 		trader.Iterate(candles[i], func(c Candle) Strategy {

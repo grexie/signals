@@ -1,22 +1,32 @@
 package model
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"sort"
+	"time"
 
 	"github.com/grexie/signals/pkg/ta"
 	"github.com/jedib0t/go-pretty/v6/progress"
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 type ModelParams struct {
-	WindowSize      int
-	StrategyCandles int
-	StrategyLong    float64
-	StrategyShort   float64
-	StrategyHold    float64
-	TradeCommission float64
+	Instrument string
+
+	WindowSize int
+	Candles    int
+	TakeProfit float64
+	StopLoss   float64
+	Leverage   float64
+
+	TradeMultiplier float64
+	Commission      float64
+	Cooldown        time.Duration
 
 	ShortMovingAverageLength   int
 	LongMovingAverageLength    int
@@ -52,42 +62,124 @@ type ModelParams struct {
 	LearnRate   float64
 }
 
-var DefaultModelParams = ModelParams{
-	WindowSize:      200,
-	StrategyCandles: 5,
-	StrategyLong:    0.008,
-	StrategyShort:   0.008,
-	StrategyHold:    0.002,
-	TradeCommission: 0.001,
+func (m *ModelParams) Write(w io.Writer, title string) {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.SetTitle(title)
+	t.AppendRows([]table.Row{
+		{"SIGNALS_INSTRUMENT", m.Instrument},
+		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%d", m.WindowSize)},
+		{"SIGNALS_CANDLES", fmt.Sprintf("%d", m.Candles)},
+		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%0.04f", m.TakeProfit*m.Leverage)},
+		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%0.04f", m.StopLoss*m.Leverage)},
+		{"SIGNALS_LEVERAGE", fmt.Sprintf("%0.0f", m.Leverage)},
+		{"SIGNALS_TRADE_MULTIPLIER", fmt.Sprintf("%0.04f", m.TradeMultiplier)},
+		{"SIGNALS_COMMISSION", fmt.Sprintf("%0.04f", m.Commission)},
+		{"SIGNALS_COOLDOWN", fmt.Sprintf("%0.0f", m.Cooldown.Seconds())},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
+		{"SIGNALS_L2_PENALTY", fmt.Sprintf("%.06f", m.L2Penalty)},
+		{"SIGNALS_DROPOUT_RATE", fmt.Sprintf("%.06f", m.DropoutRate)},
+		{"SIGNALS_LEARN_RATE", fmt.Sprintf("%.06f", m.LearnRate)},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
+		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.ShortMovingAverageLength)},
+		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.LongMovingAverageLength)},
+		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%d", m.LongRSILength)},
+		{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%d", m.ShortRSILength)},
+		{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.ShortMACDWindowLength)},
+		{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.LongMACDWindowLength)},
+		{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", m.MACDSignalWindow)},
+		{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.FastShortMACDWindowLength)},
+		{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.FastLongMACDWindowLength)},
+		{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", m.FastMACDSignalWindow)},
+		{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%d", m.BollingerBandsWindow)},
+		{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", m.BollingerBandsMultiplier)},
+		{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%d", m.StochasticOscillatorWindow)},
+		{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", m.SlowATRPeriod)},
+		{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", m.FastATRPeriod)},
+		{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.OBVMovingAverageLength)},
+		{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.VolumesMovingAverageLength)},
+		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%d", m.ChaikinMoneyFlowPeriod)},
+		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%d", m.MoneyFlowIndexPeriod)},
+		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", m.RateOfChangePeriod)},
+		{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%d", m.CCIPeriod)},
+		{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%d", m.WilliamsRPeriod)},
+		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%d", m.PriceChangeFastPeriod)},
+		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%d", m.PriceChangeMediumPeriod)},
+		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%d", m.PriceChangeSlowPeriod)},
+		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", m.RSIUpperBound)},
+		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", m.RSILowerBound)},
+		{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%d", m.RSISlope)},
+	})
+	t.Render()
 
-	ShortMovingAverageLength:   50,
-	LongMovingAverageLength:    200,
-	LongRSILength:              14,
-	ShortRSILength:             5,
-	ShortMACDWindowLength:      12,
-	LongMACDWindowLength:       26,
-	MACDSignalWindow:           9,
-	FastShortMACDWindowLength:  5,
-	FastLongMACDWindowLength:   35,
-	FastMACDSignalWindow:       5,
-	BollingerBandsWindow:       20,
-	BollingerBandsMultiplier:   2.0,
-	StochasticOscillatorWindow: 14,
-	SlowATRPeriod:              14,
-	FastATRPeriod:              20,
-	OBVMovingAverageLength:     20,
-	VolumesMovingAverageLength: 20,
-	ChaikinMoneyFlowPeriod:     20,
-	MoneyFlowIndexPeriod:       14,
-	RateOfChangePeriod:         14,
-	CCIPeriod:                  20,
-	WilliamsRPeriod:            14,
-	PriceChangeFastPeriod:      60,
-	PriceChangeMediumPeriod:    240,
-	PriceChangeSlowPeriod:      1440,
-	RSIUpperBound:              50.0,
-	RSILowerBound:              50.0,
-	RSISlope:                   3,
+	t = table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetTitle("Trade Info")
+	t.AppendRows([]table.Row{
+		{"Take Profit", fmt.Sprintf("%0.02f%%", (100*m.TakeProfit*m.Leverage)/m.TradeMultiplier)},
+		{"Stop Loss", fmt.Sprintf("%0.02f%%", (100 * m.StopLoss * m.TradeMultiplier))},
+		{"Leverage", fmt.Sprintf("%0.0f", m.Leverage)},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
+		{"TP %", fmt.Sprintf("%0.02f%%", 100*m.TakeProfit/(m.TradeMultiplier))},
+		{"SL %", fmt.Sprintf("%0.02f%%", 100*m.StopLoss*m.TradeMultiplier)},
+		{"Commission", fmt.Sprintf("%0.02f%%", 100*m.Commission*m.Leverage)},
+	})
+	t.Render()
+}
+
+func NewModelParamsFromDefaults() ModelParams {
+	return ModelParams{
+		Instrument: Instrument(),
+
+		WindowSize: WindowSize(),
+		Candles:    Candles(),
+		TakeProfit: TakeProfit() / Leverage(),
+		StopLoss:   StopLoss() / Leverage(),
+		Leverage:   Leverage(),
+
+		TradeMultiplier: TradeMultiplier(),
+		Commission:      Commission(),
+		Cooldown:        Cooldown(),
+
+		ShortMovingAverageLength:   ShortMovingAverageLength(),
+		LongMovingAverageLength:    LongMovingAverageLength(),
+		LongRSILength:              LongRSILength(),
+		ShortRSILength:             ShortRSILength(),
+		ShortMACDWindowLength:      ShortMACDWindowLength(),
+		LongMACDWindowLength:       LongMACDWindowLength(),
+		MACDSignalWindow:           MACDSignalWindow(),
+		FastShortMACDWindowLength:  FastShortMACDWindowLength(),
+		FastLongMACDWindowLength:   FastLongMACDWindowLength(),
+		FastMACDSignalWindow:       FastMACDSignalWindow(),
+		BollingerBandsWindow:       BollingerBandsWindow(),
+		BollingerBandsMultiplier:   BollingerBandsMultiplier(),
+		StochasticOscillatorWindow: StochasticOscillatorWindow(),
+		SlowATRPeriod:              SlowATRPeriod(),
+		FastATRPeriod:              FastATRPeriod(),
+		OBVMovingAverageLength:     OBVMovingAverageLength(),
+		VolumesMovingAverageLength: VolumesMovingAverageLength(),
+		ChaikinMoneyFlowPeriod:     ChaikinMoneyFlowPeriod(),
+		MoneyFlowIndexPeriod:       MoneyFlowIndexPeriod(),
+		RateOfChangePeriod:         RateOfChangePeriod(),
+		CCIPeriod:                  CCIPeriod(),
+		WilliamsRPeriod:            WilliamsRPeriod(),
+		PriceChangeFastPeriod:      PriceChangeFastPeriod(),
+		PriceChangeMediumPeriod:    PriceChangeMediumPeriod(),
+		PriceChangeSlowPeriod:      PriceChangeSlowPeriod(),
+		RSIUpperBound:              RSIUpperBound(),
+		RSILowerBound:              RSILowerBound(),
+		RSISlope:                   RSISlope(),
+
+		L2Penalty:   L2Penalty(),
+		DropoutRate: DropoutRate(),
+		LearnRate:   LearnRate(),
+	}
 }
 
 func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
@@ -302,7 +394,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 	tracker.Message = "Feature extraction"
 
 	// Feature extraction with sliding window
-	for i := params.WindowSize; i < len(candles)-params.StrategyCandles; i++ {
+	for i := params.WindowSize; i < len(candles)-params.Candles; i++ {
 		tracker.Increment(1)
 
 		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
@@ -386,9 +478,9 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		// Look ahead window
 		highestHigh := basePrice
 		lowestLow := basePrice
-		closingPrice := candles[i+params.StrategyCandles].Close
+		closingPrice := candles[i+params.Candles].Close
 
-		for j := 1; j <= params.StrategyCandles; j++ {
+		for j := 1; j <= params.Candles; j++ {
 			highestHigh = math.Max(highestHigh, candles[i+j].High)
 			lowestLow = math.Min(lowestLow, candles[i+j].Low)
 		}
@@ -398,13 +490,13 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		actualChange := (closingPrice - basePrice) / basePrice
 
 		// Enhanced signal generation with trend confirmation
-		if potentialGain >= params.StrategyLong &&
+		if potentialGain >= params.TakeProfit &&
 			actualChange > 0 &&
 			rsi14[i] > params.RSIUpperBound &&
 			rsiSlope > 0 &&
 			macd[i] > macdSignal[i] {
 			label = StrategyLong
-		} else if potentialLoss >= params.StrategyShort &&
+		} else if potentialLoss >= params.TakeProfit &&
 			actualChange < 0 &&
 			rsi14[i] < params.RSILowerBound &&
 			rsiSlope < 0 &&
