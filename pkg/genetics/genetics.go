@@ -383,10 +383,20 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 
 		// Collect results
 		fitnesses := []float64{}
+		pnls := []float64{}
+		maxDrawdowns := []float64{}
+		sharpes := []float64{}
+		sortinos := []float64{}
+		trades := []float64{}
 		newPopulation := make([]Strategy, 0, popSize)
 		for s := range results {
 			newPopulation = append(newPopulation, s)
 			fitnesses = append(fitnesses, s.ModelMetrics.Fitness())
+			pnls = append(pnls, s.ModelMetrics.Backtest.Mean.PnL)
+			maxDrawdowns = append(maxDrawdowns, s.ModelMetrics.Backtest.Mean.MaxDrawdown)
+			sharpes = append(sharpes, s.ModelMetrics.Backtest.Mean.SharpeRatio)
+			sortinos = append(sortinos, s.ModelMetrics.Backtest.Mean.SortinoRatio)
+			trades = append(trades, s.ModelMetrics.Backtest.Mean.Trades)
 		}
 
 		tracker.MarkAsDone()
@@ -416,12 +426,42 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		// Best strategy of this generation
 		strategy := population[0]
 
+		maxFloats := func(v []float64) float64 {
+			if len(v) == 0 {
+				return 0
+			}
+			out := v[0]
+			for i := 1; i < len(v); i++ {
+				if out < v[i] {
+					out = v[i]
+				}
+			}
+			return out
+		}
+		minFloats := func(v []float64) float64 {
+			if len(v) == 0 {
+				return 0
+			}
+			out := v[0]
+			for i := 1; i < len(v); i++ {
+				if out > v[i] {
+					out = v[i]
+				}
+			}
+			return out
+		}
+
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.SetTitle(fmt.Sprintf("Generation %d - Summary", gen))
-		t.AppendHeader(table.Row{"", "MEAN", "STDDEV"})
+		t.AppendHeader(table.Row{"", "MEAN", "MIN", "MAX", "STDDEV"})
 		t.AppendRows([]table.Row{
-			{"Fitness", fmt.Sprintf("%0.10f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.10f", stat.StdDev(fitnesses, nil))},
+			{"Fitness", fmt.Sprintf("%0.6f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.6f", minFloats(fitnesses)), fmt.Sprintf("%0.6f", maxFloats(fitnesses)), fmt.Sprintf("%0.6f", stat.StdDev(fitnesses, nil))},
+			{"PnL", fmt.Sprintf("%0.2f%%", stat.Mean(pnls, nil)), fmt.Sprintf("%0.2f%%", minFloats(pnls)), fmt.Sprintf("%0.2f%%", maxFloats(pnls)), fmt.Sprintf("%0.6f", stat.StdDev(pnls, nil))},
+			{"Max Drawdown", fmt.Sprintf("%0.2f%%", stat.Mean(maxDrawdowns, nil)), fmt.Sprintf("%0.2f%%", minFloats(maxDrawdowns)), fmt.Sprintf("%0.2f%%", maxFloats(maxDrawdowns)), fmt.Sprintf("%0.6f", stat.StdDev(maxDrawdowns, nil))},
+			{"Sharpe Ratio", fmt.Sprintf("%0.2f", stat.Mean(sharpes, nil)), fmt.Sprintf("%0.2f", minFloats(sharpes)), fmt.Sprintf("%0.2f", maxFloats(sharpes)), fmt.Sprintf("%0.6f", stat.StdDev(sharpes, nil))},
+			{"Sortino Ratio", fmt.Sprintf("%0.2f", stat.Mean(sortinos, nil)), fmt.Sprintf("%0.2f", minFloats(sortinos)), fmt.Sprintf("%0.2f", maxFloats(sortinos)), fmt.Sprintf("%0.6f", stat.StdDev(sortinos, nil))},
+			{"Trades", fmt.Sprintf("%0.2f", stat.Mean(trades, nil)), fmt.Sprintf("%0.2f", minFloats(trades)), fmt.Sprintf("%0.2f", maxFloats(trades)), fmt.Sprintf("%0.6f", stat.StdDev(trades, nil))},
 		})
 		t.Render()
 

@@ -137,7 +137,7 @@ func (m ModelMetrics) Write(w io.Writer) error {
 		{"Trades", fmt.Sprintf("%6.2f", m.Backtest.Mean.Trades), fmt.Sprintf("%6.2f", m.Backtest.Min.Trades), fmt.Sprintf("%6.2f", m.Backtest.Max.Trades), fmt.Sprintf("%6.2f", m.Backtest.StdDev.Trades)},
 	})
 	t.AppendSeparator()
-	t.AppendRow(table.Row{"Fitness", fmt.Sprintf("%6.8f", m.Fitness())})
+	t.AppendRow(table.Row{"Fitness", fmt.Sprintf("%.6f", m.Fitness())})
 	t.Render()
 
 	return nil
