@@ -335,6 +335,9 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		if numWorkers < 1 {
 			numWorkers = 1
 		}
+		if numWorkers > popSize {
+			numWorkers = popSize
+		}
 		chunkSize := popSize / numWorkers
 
 		for i := 0; i < numWorkers; i++ {

@@ -9,6 +9,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/joho/godotenv v1.5.1
 	github.com/syndtr/goleveldb v1.0.0
+	gonum.org/v1/gonum v0.11.0
 	gorgonia.org/gorgonia v0.9.18
 	gorgonia.org/tensor v0.9.24
 )
@@ -36,7 +37,6 @@ require (
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	gonum.org/v1/gonum v0.11.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gorgonia.org/cu v0.9.4 // indirect
 	gorgonia.org/dawson v1.2.0 // indirect
