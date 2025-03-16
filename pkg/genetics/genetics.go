@@ -438,7 +438,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		t.SetTitle(fmt.Sprintf("Generation %d - Summary", gen))
 		t.AppendHeader(table.Row{"", "MEAN", "STDDEV"})
 		t.AppendRows([]table.Row{
-			{"Fitness", fmt.Sprintf("%0.04f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.04f", stat.StdDev(fitnesses, nil))},
+			{"Fitness", fmt.Sprintf("%0.08f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.08f", stat.StdDev(fitnesses, nil))},
 		})
 		t.Render()
 

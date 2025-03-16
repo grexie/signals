@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"runtime"
 
 	"github.com/grexie/signals/pkg/candles"
 	"github.com/grexie/signals/pkg/genetics"
@@ -28,6 +29,8 @@ func loadEnv(filenames ...string) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	if _, ok := os.LookupEnv("ENV"); !ok {
 		env := "development"
 		os.Setenv("ENV", env)

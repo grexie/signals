@@ -26,7 +26,7 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 	hiddenSize2 := 32
 	hiddenSize3 := 16
 	outputSize := 3
-	batchSize := 32
+	batchSize := 2048
 
 	// Hyperparameters
 	dropoutRate := 0.3
