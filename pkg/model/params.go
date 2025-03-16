@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -59,75 +60,81 @@ type ModelParams struct {
 	LearnRate   float64
 }
 
-func (m *ModelParams) Write(w io.Writer, title string) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
-	t.SetTitle(title)
-	t.AppendRows([]table.Row{
-		{"SIGNALS_INSTRUMENT", m.Instrument},
-		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%d", m.WindowSize)},
-		{"SIGNALS_CANDLES", fmt.Sprintf("%d", m.Candles)},
-		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%0.04f", m.TakeProfit*m.Leverage)},
-		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%0.04f", m.StopLoss*m.Leverage)},
-		{"SIGNALS_LEVERAGE", fmt.Sprintf("%0.0f", m.Leverage)},
-		{"SIGNALS_TRADE_MULTIPLIER", fmt.Sprintf("%0.04f", m.TradeMultiplier)},
-		{"SIGNALS_COMMISSION", fmt.Sprintf("%0.04f", m.Commission)},
-		{"SIGNALS_COOLDOWN", fmt.Sprintf("%0.0f", m.Cooldown.Seconds())},
-	})
-	t.AppendSeparator()
-	t.AppendRows([]table.Row{
-		{"SIGNALS_L2_PENALTY", fmt.Sprintf("%.06f", m.L2Penalty)},
-		{"SIGNALS_DROPOUT_RATE", fmt.Sprintf("%.06f", m.DropoutRate)},
-		{"SIGNALS_LEARN_RATE", fmt.Sprintf("%.06f", m.LearnRate)},
-	})
-	t.AppendSeparator()
-	t.AppendRows([]table.Row{
-		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.ShortMovingAverageLength)},
-		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.LongMovingAverageLength)},
-		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%d", m.LongRSILength)},
-		{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%d", m.ShortRSILength)},
-		{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.ShortMACDWindowLength)},
-		{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.LongMACDWindowLength)},
-		{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", m.MACDSignalWindow)},
-		{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.FastShortMACDWindowLength)},
-		{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%d", m.FastLongMACDWindowLength)},
-		{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%d", m.FastMACDSignalWindow)},
-		{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%d", m.BollingerBandsWindow)},
-		{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", m.BollingerBandsMultiplier)},
-		{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%d", m.StochasticOscillatorWindow)},
-		{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", m.SlowATRPeriod)},
-		{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%d", m.FastATRPeriod)},
-		{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.OBVMovingAverageLength)},
-		{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", m.VolumesMovingAverageLength)},
-		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%d", m.ChaikinMoneyFlowPeriod)},
-		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%d", m.MoneyFlowIndexPeriod)},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%d", m.RateOfChangePeriod)},
-		{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%d", m.CCIPeriod)},
-		{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%d", m.WilliamsRPeriod)},
-		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%d", m.PriceChangeFastPeriod)},
-		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%d", m.PriceChangeMediumPeriod)},
-		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%d", m.PriceChangeSlowPeriod)},
-		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", m.RSIUpperBound)},
-		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", m.RSILowerBound)},
-		{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%d", m.RSISlope)},
-	})
-	t.Render()
+func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
 
-	t = table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.SetTitle("Trade Info")
-	t.AppendRows([]table.Row{
-		{"Take Profit", fmt.Sprintf("%0.02f%%", (100*m.TakeProfit*m.Leverage)/m.TradeMultiplier)},
-		{"Stop Loss", fmt.Sprintf("%0.02f%%", (100 * m.StopLoss * m.TradeMultiplier))},
-		{"Leverage", fmt.Sprintf("%0.0f", m.Leverage)},
-	})
-	t.AppendSeparator()
-	t.AppendRows([]table.Row{
-		{"TP %", fmt.Sprintf("%0.02f%%", 100*m.TakeProfit/(m.TradeMultiplier))},
-		{"SL %", fmt.Sprintf("%0.02f%%", 100*m.StopLoss*m.TradeMultiplier)},
-		{"Commission", fmt.Sprintf("%0.02f%%", 100*m.Commission*m.Leverage)},
-	})
-	t.Render()
+	w.Write(fmt.Appendf([]byte{}, "+-%s-+\n| %s |\n+-%s-+\n\n", strings.Repeat("-", len(title)), title, strings.Repeat("-", len(title))))
+
+	params := []string{
+		fmt.Sprintf("SIGNALS_INSTRUMENT=%s", m.Instrument),
+		fmt.Sprintf("SIGNALS_LEVERAGE=%0.0f", m.Leverage),
+		fmt.Sprintf("SIGNALS_TRADE_MULTIPLIER=%0.04f", m.TradeMultiplier),
+		fmt.Sprintf("SIGNALS_COMMISSION=%0.04f", m.Commission),
+		fmt.Sprintf("SIGNALS_COOLDOWN=%0.0f", m.Cooldown.Seconds()),
+		"",
+		fmt.Sprintf("SIGNALS_WINDOW_SIZE=%d", m.WindowSize),
+		fmt.Sprintf("SIGNALS_CANDLES=%d", m.Candles),
+		fmt.Sprintf("SIGNALS_TAKE_PROFIT=%0.04f", m.TakeProfit*m.Leverage),
+		fmt.Sprintf("SIGNALS_STOP_LOSS=%0.04f", m.StopLoss*m.Leverage),
+		"",
+		fmt.Sprintf("SIGNALS_L2_PENALTY=%.06f", m.L2Penalty),
+		fmt.Sprintf("SIGNALS_DROPOUT_RATE=%.06f", m.DropoutRate),
+		fmt.Sprintf("SIGNALS_LEARN_RATE=%.06f", m.LearnRate),
+		"",
+		fmt.Sprintf("SIGNALS_SHORT_MOVING_AVERAGE_LENGTH=%d", m.ShortMovingAverageLength),
+		fmt.Sprintf("SIGNALS_LONG_MOVING_AVERAGE_LENGTH=%d", m.LongMovingAverageLength),
+		fmt.Sprintf("SIGNALS_LONG_RSI_LENGTH=%d", m.LongRSILength),
+		fmt.Sprintf("SIGNALS_SHORT_RSI_LENGTH=%d", m.ShortRSILength),
+		fmt.Sprintf("SIGNALS_SHORT_MACD_WINDOW_LENGTH=%d", m.ShortMACDWindowLength),
+		fmt.Sprintf("SIGNALS_LONG_MACD_WINDOW_LENGTH=%d", m.LongMACDWindowLength),
+		fmt.Sprintf("SIGNALS_MACD_SIGNAL_WINDOW=%d", m.MACDSignalWindow),
+		fmt.Sprintf("SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH=%d", m.FastShortMACDWindowLength),
+		fmt.Sprintf("SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH=%d", m.FastLongMACDWindowLength),
+		fmt.Sprintf("SIGNALS_FAST_MACD_SIGNAL_WINDOW=%d", m.FastMACDSignalWindow),
+		fmt.Sprintf("SIGNALS_BOLLINGER_BANDS_WINDOW=%d", m.BollingerBandsWindow),
+		fmt.Sprintf("SIGNALS_BOLLINGER_BANDS_MULTIPLIER=%0.02f", m.BollingerBandsMultiplier),
+		fmt.Sprintf("SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW=%d", m.StochasticOscillatorWindow),
+		fmt.Sprintf("SIGNALS_SLOW_ATR_PERIOD_WINDOW=%d", m.SlowATRPeriod),
+		fmt.Sprintf("SIGNALS_FAST_ATR_PERIOD_WINDOW=%d", m.FastATRPeriod),
+		fmt.Sprintf("SIGNALS_OBV_MOVING_AVERAGE_LENGTH=%d", m.OBVMovingAverageLength),
+		fmt.Sprintf("SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH=%d", m.VolumesMovingAverageLength),
+		fmt.Sprintf("SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD=%d", m.ChaikinMoneyFlowPeriod),
+		fmt.Sprintf("SIGNALS_MONEY_FLOW_INDEX_PERIOD=%d", m.MoneyFlowIndexPeriod),
+		fmt.Sprintf("SIGNALS_RATE_OF_CHANGE_PERIOD=%d", m.RateOfChangePeriod),
+		fmt.Sprintf("SIGNALS_CCI_PERIOD=%d", m.CCIPeriod),
+		fmt.Sprintf("SIGNALS_WILLIAMS_R_PERIOD=%d", m.WilliamsRPeriod),
+		fmt.Sprintf("SIGNALS_PRICE_CHANGE_FAST_PERIOD=%d", m.PriceChangeFastPeriod),
+		fmt.Sprintf("SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD=%d", m.PriceChangeMediumPeriod),
+		fmt.Sprintf("SIGNALS_PRICE_CHANGE_SLOW_PERIOD=%d", m.PriceChangeSlowPeriod),
+		fmt.Sprintf("SIGNALS_RSI_UPPER_BOUND=%0.02f", m.RSIUpperBound),
+		fmt.Sprintf("SIGNALS_RSI_LOWER_BOUND=%0.02f", m.RSILowerBound),
+		fmt.Sprintf("SIGNALS_RSI_SLOPE=%d", m.RSISlope),
+	}
+
+	for _, param := range params {
+		w.Write(fmt.Appendf([]byte{}, "%s\n", param))
+	}
+
+	w.Write(fmt.Appendf([]byte{}, "\n"))
+
+	if tradeInfo {
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.SetTitle("Trade Info")
+		t.AppendRows([]table.Row{
+			{"Take Profit", fmt.Sprintf("%0.02f%%", (100*m.TakeProfit*m.Leverage)/m.TradeMultiplier)},
+			{"Stop Loss", fmt.Sprintf("%0.02f%%", (100 * m.StopLoss * m.TradeMultiplier))},
+			{"Leverage", fmt.Sprintf("%0.0f", m.Leverage)},
+		})
+		t.AppendSeparator()
+		t.AppendRows([]table.Row{
+			{"TP %", fmt.Sprintf("%0.02f%%", 100*m.TakeProfit/(m.TradeMultiplier))},
+			{"SL %", fmt.Sprintf("%0.02f%%", 100*m.StopLoss*m.TradeMultiplier)},
+			{"Commission", fmt.Sprintf("%0.02f%%", 100*m.Commission*m.Leverage)},
+		})
+		t.Render()
+		w.Write(fmt.Appendf([]byte{}, "\n"))
+	}
+
 }
 
 func NewModelParamsFromDefaults() ModelParams {

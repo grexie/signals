@@ -424,7 +424,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		t.Render()
 
 		params := StrategyToParams(strategy)
-		params.Write(os.Stdout, fmt.Sprintf("Generation %d - Best Strategy", gen))
+		params.Write(os.Stdout, fmt.Sprintf("Generation %d - Best Strategy", gen), false)
 		strategy.ModelMetrics.Write(os.Stdout)
 	}
 

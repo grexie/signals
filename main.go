@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -89,7 +90,7 @@ func main() {
 	}
 
 	params := model.NewModelParamsFromDefaults()
-	params.Write(os.Stdout, "Model Config")
+	params.Write(os.Stdout, "Model Config", true)
 
 	pw := progress.NewWriter()
 	pw.SetMessageLength(40)
@@ -195,7 +196,7 @@ func main() {
 
 func Train(db *leveldb.DB, instrument string) {
 	params := model.NewModelParamsFromDefaults()
-	params.Write(os.Stdout, "Model Config")
+	params.Write(os.Stdout, "Model Config", false)
 
 	pw := progress.NewWriter()
 	pw.SetMessageLength(40)
@@ -242,5 +243,67 @@ func Optimize(db *leveldb.DB, instrument string) {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 
-	genetics.NaturalSelection(db, instrument, now, 75, 20, 0.45, 0.25, 5)
+	populationSize := 50
+	if v, ok := os.LookupEnv("SIGNALS_OPTIMIZER_POPULATION_SIZE"); ok {
+		if v, err := strconv.ParseInt(v, 10, 64); err != nil {
+			log.Fatalf("error parsing SIGNALS_OPTIMIZER_POPULATION_SIZE: %v", err)
+		} else {
+			populationSize = int(v)
+		}
+	}
+
+	generations := 20
+	if v, ok := os.LookupEnv("SIGNALS_OPTIMIZER_GENERATIONS"); ok {
+		if v, err := strconv.ParseInt(v, 10, 64); err != nil {
+			log.Fatalf("error parsing SIGNALS_OPTIMIZER_GENERATIONS: %v", err)
+		} else {
+			generations = int(v)
+		}
+	}
+
+	retainRate := 0.45
+	if v, ok := os.LookupEnv("SIGNALS_OPTIMIZER_RETAIN_RATE"); ok {
+		if v, err := strconv.ParseFloat(v, 64); err != nil {
+			log.Fatalf("error parsing SIGNALS_OPTIMIZER_RETAIN_RATE: %v", err)
+		} else {
+			retainRate = v
+		}
+	}
+
+	mutationRate := 0.25
+	if v, ok := os.LookupEnv("SIGNALS_OPTIMIZER_MUTATION_RATE"); ok {
+		if v, err := strconv.ParseFloat(v, 64); err != nil {
+			log.Fatalf("error parsing SIGNALS_OPTIMIZER_MUTATION_RATE: %v", err)
+		} else {
+			mutationRate = v
+		}
+	}
+
+	eliteCount := 3
+	if v, ok := os.LookupEnv("SIGNALS_OPTIMIZER_ELITE_COUNT"); ok {
+		if v, err := strconv.ParseInt(v, 10, 64); err != nil {
+			log.Fatalf("error parsing SIGNALS_OPTIMIZER_ELITE_COUNT: %v", err)
+		} else {
+			eliteCount = int(v)
+		}
+	}
+
+	title := "Optimizer Config"
+	os.Stdout.Write(fmt.Appendf([]byte{}, "+-%s-+\n| %s |\n+-%s-+\n\n", strings.Repeat("-", len(title)), title, strings.Repeat("-", len(title))))
+
+	params := []string{
+		fmt.Sprintf("SIGNALS_OPTIMIZER_POPULATION_SIZE=%d", populationSize),
+		fmt.Sprintf("SIGNALS_OPTIMIZER_GENERATIONS=%d", generations),
+		fmt.Sprintf("SIGNALS_OPTIMIZER_RETAIN_RATE=%.4f", retainRate),
+		fmt.Sprintf("SIGNALS_OPTIMIZER_MUTATION_RATE=%.4f", mutationRate),
+		fmt.Sprintf("SIGNALS_OPTIMIZER_ELITE_COUNT=%d", eliteCount),
+	}
+
+	for _, param := range params {
+		fmt.Printf("%s\n", param)
+	}
+
+	fmt.Println()
+
+	genetics.NaturalSelection(db, instrument, now, populationSize, generations, retainRate, mutationRate, eliteCount)
 }
