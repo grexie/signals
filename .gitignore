@@ -3,3 +3,4 @@
 .env*.local
 bin/
 signals-cache.db/
+signals-db.tar.gz
