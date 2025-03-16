@@ -152,14 +152,16 @@ func randomizeStrategy(s *Strategy, percent float64) {
 
 func StrategyToParams(s Strategy) model.ModelParams {
 	return model.ModelParams{
-		Instrument: model.Instrument(),
-		Cooldown:   model.Cooldown(),
+		Instrument:      model.Instrument(),
+		Leverage:        model.Leverage(),
+		TradeMultiplier: model.TradeMultiplier(),
+		Commission:      model.Commission(),
+		Cooldown:        model.Cooldown(),
 
 		WindowSize: int(s.WindowSize),
 		Candles:    int(s.Candles),
 		TakeProfit: s.TakeProfit / model.Leverage(),
 		StopLoss:   s.StopLoss / model.Leverage(),
-		Commission: model.Commission(),
 
 		ShortMovingAverageLength:   int(s.ShortMovingAverageLength),
 		LongMovingAverageLength:    int(s.LongMovingAverageLength),
