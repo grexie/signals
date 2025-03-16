@@ -135,7 +135,7 @@ func tradeFactor(trades float64, maxTrades float64) float64 {
 
 func (m *ModelMetrics) Fitness() float64 {
 	avgF1 := (m.F1Scores[0] + m.F1Scores[1] + m.F1Scores[2]) / 300
-	normPnL := math.Tanh(safeValue(m.Backtest.Mean.PnL, 0) / 150)      // smoother scaling
+	normPnL := math.Tanh(safeValue(m.Backtest.Mean.PnL, 0) / 100)      // smoother scaling
 	sharpe := math.Tanh(safeValue(m.Backtest.Mean.SharpeRatio, 0) / 3) // Smoother scaling
 	sortino := math.Tanh(safeValue(m.Backtest.Mean.SortinoRatio, 0) / 3)
 	drawdownPenalty := math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0) / 25) // Less extreme penalty
@@ -150,7 +150,7 @@ func (m *ModelMetrics) Fitness() float64 {
 	riskRewardFactor := math.Tanh((safeValue(m.Backtest.Mean.PnL, 0) / math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1)) * 0.1)
 
 	// Apply PnL Penalty to Encourage Profitability
-	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/5))
+	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/10))
 
 	// Compute base fitness
 	fitness := avgF1*0.15 + sortino*0.3 + sharpe*0.2 + normPnL*0.15
@@ -160,7 +160,7 @@ func (m *ModelMetrics) Fitness() float64 {
 	fitness *= tradeFactor
 	fitness *= (1 + riskRewardFactor*0.15)
 	fitness *= variancePenalty
-	fitness *= pnlPenalty
+	fitness *= (1 + pnlPenalty*0.2)
 
 	fitness = safeValue(fitness, 0)
 
