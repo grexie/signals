@@ -128,9 +128,9 @@ func safeValue(v float64, def float64) float64 {
 func tradeFactor(trades float64, maxTrades float64) float64 {
 	trades = safeValue(trades, 0)
 	if trades <= maxTrades {
-		return math.Min(1.8*math.Tanh(trades*0.25), 1.5) // Normal scaling up to 30 trades
+		return math.Min(1.5*math.Tanh(trades*0.15), 1.2) // Reduce incentive for excessive trades
 	}
-	return 1.5 * math.Exp(-(trades-maxTrades)/5) // Exponential decay penalty for trades > 30
+	return 1.2 * math.Exp(-(trades-maxTrades)/3) // Harsher penalty for too many trades
 }
 
 func (m *ModelMetrics) Fitness() float64 {
@@ -163,13 +163,15 @@ func (m *ModelMetrics) Fitness() float64 {
 	fitness *= (1 + pnlPenalty*0.2)
 
 	if m.Backtest.Mean.PnL > 0 {
-		fitness *= 1.5 + (m.Backtest.Mean.PnL / 100) // Reward positive PnL
+		fitness *= 1.8 + (m.Backtest.Mean.PnL / 50) // Increased reward for positive PnL
 	} else {
 		fitness *= math.Exp(m.Backtest.Mean.PnL / 50) // Exponentially penalize losses
 	}
 
-	if m.Backtest.Min.MaxDrawdown >= 99 {
-		fitness *= 0.1 // Harsh penalty for full account wipeout
+	if m.Backtest.Min.MaxDrawdown >= 99.5 {
+		fitness *= 0.01 // Extreme penalty for total wipeout
+	} else if m.Backtest.Min.MaxDrawdown >= 95 {
+		fitness *= 0.1 // Strong penalty
 	}
 
 	tradeFactor_ := 1.0
