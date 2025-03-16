@@ -3,6 +3,7 @@ package genetics
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"os"
 	"runtime"
@@ -186,10 +187,25 @@ func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, no
 	}
 }
 
-// Selection (Choose the top performers)
-func selection(population []Strategy, retainRate float64) []Strategy {
+func selection(population []Strategy, retainRate float64, eliteCount int) []Strategy {
+	fitnesses := make([]float64, len(population))
+	for i, s := range population {
+		fitnesses[i] = s.ModelMetrics.Fitness()
+	}
+	fitnessStdDev := stat.StdDev(fitnesses, nil)
+	if fitnessStdDev > 0.05 {
+		retainRate *= 0.9 // More selection pressure
+	} else {
+		retainRate *= 1.1 // Allow more exploration
+	}
+
 	n := int(float64(len(population)) * retainRate)
-	elite := population[:n]
+	elite := make([]Strategy, 0, eliteCount)
+
+	// Explicitly retain the top 'eliteCount' best models no matter what
+	for i := 0; i < eliteCount; i++ {
+		elite = append(elite, population[i])
+	}
 
 	// Stochastic selection for maintaining diversity
 	roulette := make([]Strategy, 0, len(population))
@@ -199,7 +215,8 @@ func selection(population []Strategy, retainRate float64) []Strategy {
 	}
 
 	for _, s := range population[n:] {
-		if rand.Float64() < (s.ModelMetrics.Fitness() / totalFitness) {
+		scaledFitness := math.Exp(s.ModelMetrics.Fitness())
+		if rand.Float64() < (scaledFitness / totalFitness) {
 			roulette = append(roulette, s)
 		}
 	}
@@ -280,7 +297,7 @@ func worker(ctx context.Context, db *leveldb.DB, pw progress.Writer, tracker *pr
 }
 
 // Main Genetic Algorithm
-func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize, generations int, retainRate, mutationRate float64) Strategy {
+func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize, generations int, retainRate, mutationRate float64, eliteCount int) Strategy {
 	// Initialize random population
 	population := make([]Strategy, popSize)
 	population[0] = newStrategy(instrument)
@@ -356,7 +373,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		})
 
 		// Apply selection
-		population = selection(newPopulation, retainRate)
+		population = selection(newPopulation, retainRate, eliteCount)
 
 		// Generate new population via crossover
 		for len(population) < popSize {

@@ -130,7 +130,7 @@ func tradeFactor(trades float64, maxTrades float64) float64 {
 	if trades <= maxTrades {
 		return math.Min(1.8*math.Tanh(trades*0.25), 1.5) // Normal scaling up to 30 trades
 	}
-	return 1.5 * math.Exp(-(trades-maxTrades)/10) // Exponential decay penalty for trades > 30
+	return 1.5 * math.Exp(-(trades-maxTrades)/5) // Exponential decay penalty for trades > 30
 }
 
 func (m *ModelMetrics) Fitness() float64 {
@@ -138,25 +138,29 @@ func (m *ModelMetrics) Fitness() float64 {
 	normPnL := math.Tanh(safeValue(m.Backtest.Mean.PnL, 0) / 150)      // smoother scaling
 	sharpe := math.Tanh(safeValue(m.Backtest.Mean.SharpeRatio, 0) / 3) // Smoother scaling
 	sortino := math.Tanh(safeValue(m.Backtest.Mean.SortinoRatio, 0) / 3)
-	drawdownPenalty := math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0) / 50) // Less extreme penalty
+	drawdownPenalty := math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0) / 25) // Less extreme penalty
+
+	// Penalize high variance across backtests
+	variancePenalty := 1 / (1 + safeValue(m.Backtest.StdDev.PnL, 0)/5) // The divisor controls penalty strength
 
 	// Cap trade rewards to prevent overtrading dominance
-	tradeFactor := tradeFactor(safeValue(m.Backtest.Mean.Trades, 0), 24) // Cap trade rewards
+	tradeFactor := tradeFactor(safeValue(m.Backtest.Mean.Trades, 0), 30) // Cap trade rewards
 
 	// Risk-Adjusted Return Modifier: Rewards per-trade profitability
 	riskRewardFactor := math.Tanh((safeValue(m.Backtest.Mean.PnL, 0) / math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1)) * 0.1)
 
+	// Apply PnL Penalty to Encourage Profitability
+	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/5))
+
 	// Compute base fitness
 	fitness := avgF1*0.15 + sortino*0.3 + sharpe*0.2 + normPnL*0.15
 
-	// add drawdown penalty
+	// Apply all penalties
 	fitness *= drawdownPenalty
-
-	// add trade factor to incentivize trades without making too many trades (tanh modifier)
 	fitness *= tradeFactor
-
-	// incentivize per trade profitability
 	fitness *= (1 + riskRewardFactor*0.15)
+	fitness *= variancePenalty
+	fitness *= pnlPenalty
 
 	fitness = safeValue(fitness, 0)
 

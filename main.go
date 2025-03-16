@@ -291,6 +291,7 @@ func main() {
 }
 
 func Train(db *leveldb.DB, instrument string) {
+
 	params := model.ModelParams{
 		WindowSize:                 model.WindowSize(),
 		StrategyCandles:            model.Candles(),
@@ -373,7 +374,7 @@ func Optimize(db *leveldb.DB, instrument string) {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 
-	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.4, 0.1)
+	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.45, 0.1, 3)
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
