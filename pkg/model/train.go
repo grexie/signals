@@ -11,7 +11,7 @@ import (
 	"gorgonia.org/tensor"
 )
 
-func Train(pw progress.Writer, features [][]float64, labels []float64, epochs int) ([]tensor.Tensor, error) {
+func Train(pw progress.Writer, params ModelParams, features [][]float64, labels []float64, epochs int) ([]tensor.Tensor, error) {
 	tracker := progress.Tracker{
 		Message: "Training",
 		Total:   int64(epochs),
@@ -29,8 +29,8 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 	batchSize := 2048
 
 	// Hyperparameters
-	dropoutRate := 0.4
-	l2Penalty := 0.05
+	dropoutRate := params.DropoutRate // 0.4
+	l2Penalty := params.L2Penalty     // 0.05
 	validateEvery := 5
 	patience := 10
 
@@ -131,7 +131,7 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 
 	// Configure solver
 	solver := gorgonia.NewAdamSolver(
-		gorgonia.WithLearnRate(0.00005),
+		gorgonia.WithLearnRate(params.LearnRate), // 0.00005
 		gorgonia.WithBeta1(0.9),
 		gorgonia.WithBeta2(0.999),
 		gorgonia.WithEps(1e-8),

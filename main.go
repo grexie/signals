@@ -107,6 +107,12 @@ func main() {
 	})
 	t.AppendSeparator()
 	t.AppendRows([]table.Row{
+		{"SIGNALS_L2_PENALTY", fmt.Sprintf("%.06f", model.L2Penalty())},
+		{"SIGNALS_DROPOUT_RATE", fmt.Sprintf("%.06f", model.DropoutRate())},
+		{"SIGNALS_LEARN_RATE", fmt.Sprintf("%.06f", model.LearnRate())},
+	})
+	t.AppendSeparator()
+	t.AppendRows([]table.Row{
 		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.ShortMovingAverageLength())},
 		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%d", model.LongMovingAverageLength())},
 		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%d", model.LongRSILength())},
@@ -203,6 +209,10 @@ func main() {
 		RSIUpperBound:              model.RSIUpperBound(),
 		RSILowerBound:              model.RSILowerBound(),
 		RSISlope:                   model.RSISlope(),
+
+		L2Penalty:   model.L2Penalty(),
+		DropoutRate: model.DropoutRate(),
+		LearnRate:   model.LearnRate(),
 	}
 
 	now := time.Now()
@@ -330,6 +340,10 @@ func Train(db *leveldb.DB, instrument string) {
 		RSIUpperBound:              model.RSIUpperBound(),
 		RSILowerBound:              model.RSILowerBound(),
 		RSISlope:                   model.RSISlope(),
+
+		L2Penalty:   model.L2Penalty(),
+		DropoutRate: model.DropoutRate(),
+		LearnRate:   model.LearnRate(),
 	}
 
 	pw := progress.NewWriter()
@@ -377,49 +391,5 @@ func Optimize(db *leveldb.DB, instrument string) {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 
-	strategy := genetics.NaturalSelection(db, instrument, now, 75, 20, 0.45, 0.25, 5)
-
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.SetTitle("Best Strategy")
-	t.AppendRows([]table.Row{
-		{"SIGNALS_INSTRUMENT", strategy.Instrument},
-		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%.0f", strategy.WindowSize)},
-		{"SIGNALS_CANDLES", fmt.Sprintf("%.0f", strategy.Candles)},
-		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit)},
-		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss)},
-	})
-	t.AppendSeparator()
-	t.AppendRows([]table.Row{
-		{"SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMovingAverageLength)},
-		{"SIGNALS_LONG_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMovingAverageLength)},
-		{"SIGNALS_LONG_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.LongRSILength)},
-		{"SIGNALS_SHORT_RSI_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortRSILength)},
-		{"SIGNALS_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.ShortMACDWindowLength)},
-		{"SIGNALS_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.LongMACDWindowLength)},
-		{"SIGNALS_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.MACDSignalWindow)},
-		{"SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastShortMACDWindowLength)},
-		{"SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", fmt.Sprintf("%0.0f", strategy.FastLongMACDWindowLength)},
-		{"SIGNALS_FAST_MACD_SIGNAL_WINDOW", fmt.Sprintf("%0.0f", strategy.FastMACDSignalWindow)},
-		{"SIGNALS_BOLLINGER_BANDS_WINDOW", fmt.Sprintf("%0.0f", strategy.BollingerBandsWindow)},
-		{"SIGNALS_BOLLINGER_BANDS_MULTIPLIER", fmt.Sprintf("%0.02f", strategy.BollingerBandsMultiplier)},
-		{"SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", fmt.Sprintf("%0.0f", strategy.StochasticOscillatorWindow)},
-		{"SIGNALS_SLOW_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.SlowATRPeriod)},
-		{"SIGNALS_FAST_ATR_PERIOD_WINDOW", fmt.Sprintf("%0.0f", strategy.FastATRPeriod)},
-		{"SIGNALS_OBV_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.OBVMovingAverageLength)},
-		{"SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", fmt.Sprintf("%0.0f", strategy.VolumesMovingAverageLength)},
-		{"SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.ChaikinMoneyFlowPeriod)},
-		{"SIGNALS_MONEY_FLOW_INDEX_PERIOD", fmt.Sprintf("%0.0f", strategy.MoneyFlowIndexPeriod)},
-		{"SIGNALS_RATE_OF_CHANGE_PERIOD", fmt.Sprintf("%0.0f", strategy.RateOfChangePeriod)},
-		{"SIGNALS_CCI_PERIOD", fmt.Sprintf("%0.0f", strategy.CCIPeriod)},
-		{"SIGNALS_WILLIAMS_R_PERIOD", fmt.Sprintf("%0.0f", strategy.WilliamsRPeriod)},
-		{"SIGNALS_PRICE_CHANGE_FAST_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeFastPeriod)},
-		{"SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeMediumPeriod)},
-		{"SIGNALS_PRICE_CHANGE_SLOW_PERIOD", fmt.Sprintf("%0.0f", strategy.PriceChangeSlowPeriod)},
-		{"SIGNALS_RSI_UPPER_BOUND", fmt.Sprintf("%0.02f", strategy.RSIUpperBound)},
-		{"SIGNALS_RSI_LOWER_BOUND", fmt.Sprintf("%0.02f", strategy.RSILowerBound)},
-		{"SIGNALS_RSI_SLOPE", fmt.Sprintf("%0.0f", strategy.RSISlope)},
-	})
-	t.Render()
-	strategy.ModelMetrics.Write(os.Stdout)
+	genetics.NaturalSelection(db, instrument, now, 75, 20, 0.45, 0.25, 5)
 }

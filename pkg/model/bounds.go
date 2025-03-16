@@ -249,3 +249,15 @@ func BoundPriceChangeSlowPeriod(v int) int {
 func BoundPriceChangeSlowPeriodFloat64(v float64) float64 {
 	return math.Max(500, math.Min(2000, v))
 }
+
+func BoundL2Penalty(v float64) float64 {
+	return math.Max(0.0001, math.Min(0.1, v))
+}
+
+func BoundDropoutRate(v float64) float64 {
+	return math.Max(0.1, math.Min(0.5, v))
+}
+
+func BoundLearnRate(v float64) float64 {
+	return math.Max(1e-5, math.Min(1e-2, v))
+}

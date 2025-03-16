@@ -105,6 +105,12 @@ var (
 	RSISlope                   = envInt("SIGNALS_RSI_SLOPE", func() int { return 3 }, BoundRSISlope)
 )
 
+var (
+	DropoutRate = envFloat64("SIGNALS_DROPOUT_RATE", func() float64 { return 0.4 }, BoundDropoutRate)
+	L2Penalty   = envFloat64("SIGNALS_L2_PENALTY", func() float64 { return 0.05 }, BoundL2Penalty)
+	LearnRate   = envFloat64("SIGNALS_LEARN_RATE", func() float64 { return 0.00005 }, BoundLearnRate)
+)
+
 type ModelMetrics struct {
 	Accuracy        float64
 	ConfusionMatrix [][]float64
@@ -355,7 +361,7 @@ func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrumen
 	testingFeatures := features[countTraining:]
 	testingLabels := labels[countTraining:]
 
-	if weights, err := Train(pw, trainingFeatures, trainingLabels, 100); err != nil {
+	if weights, err := Train(pw, params, trainingFeatures, trainingLabels, 100); err != nil {
 		return nil, fmt.Errorf("training error: %v", err)
 	} else {
 		tracker := &progress.Tracker{

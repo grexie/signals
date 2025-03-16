@@ -54,6 +54,10 @@ type Strategy struct {
 	RSILowerBound              float64
 	RSISlope                   float64
 
+	L2Penalty   float64
+	DropoutRate float64
+	LearnRate   float64
+
 	ModelMetrics *model.ModelMetrics
 }
 
@@ -99,6 +103,10 @@ func newStrategy(instrument string) Strategy {
 		RSIUpperBound:              model.BoundRSIUpperBound(float64(model.RSIUpperBound())),
 		RSILowerBound:              model.BoundRSILowerBound(float64(model.RSILowerBound())),
 		RSISlope:                   model.BoundRSISlopeFloat64(float64(model.RSISlope())),
+
+		L2Penalty:   model.BoundL2Penalty(model.L2Penalty()),
+		DropoutRate: model.BoundDropoutRate(model.DropoutRate()),
+		LearnRate:   model.BoundLearnRate(model.LearnRate()),
 	}
 }
 
@@ -136,6 +144,10 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.RSIUpperBound = model.BoundRSIUpperBound(s.RSIUpperBound * randPercent(percent))
 	s.RSILowerBound = model.BoundRSILowerBound(s.RSILowerBound * randPercent(percent))
 	s.RSISlope = model.BoundRSISlopeFloat64(s.RSISlope * randPercent(percent))
+
+	s.L2Penalty = model.BoundL2Penalty(s.L2Penalty * randPercent(percent))
+	s.DropoutRate = model.BoundDropoutRate(s.DropoutRate * randPercent(percent))
+	s.LearnRate = model.BoundLearnRate(s.LearnRate * randPercent(percent))
 }
 
 // Evaluate fitness by composing a new model from the strategy
@@ -178,6 +190,10 @@ func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, no
 		RSIUpperBound:              s.RSIUpperBound,
 		RSILowerBound:              s.RSILowerBound,
 		RSISlope:                   int(s.RSISlope),
+
+		L2Penalty:   s.L2Penalty,
+		DropoutRate: s.DropoutRate,
+		LearnRate:   s.LearnRate,
 	}
 
 	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now.AddDate(0, -1, 0), now, false); err != nil {
@@ -276,6 +292,10 @@ func crossover(parent1, parent2 Strategy) Strategy {
 		RSIUpperBound:              selectValue(parent1.RSIUpperBound, parent2.RSIUpperBound),
 		RSILowerBound:              selectValue(parent1.RSILowerBound, parent2.RSILowerBound),
 		RSISlope:                   selectValue(parent1.RSISlope, parent2.RSISlope),
+
+		L2Penalty:   selectValue(parent1.L2Penalty, parent2.L2Penalty),
+		DropoutRate: selectValue(parent1.DropoutRate, parent2.DropoutRate),
+		LearnRate:   selectValue(parent1.LearnRate, parent2.LearnRate),
 	}
 }
 
@@ -399,6 +419,12 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			{"SIGNALS_CANDLES", fmt.Sprintf("%.0f", strategy.Candles)},
 			{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%.04f", strategy.TakeProfit)},
 			{"SIGNALS_STOP_LOSS", fmt.Sprintf("%.04f", strategy.StopLoss)},
+		})
+		t.AppendSeparator()
+		t.AppendRows([]table.Row{
+			{"SIGNALS_L2_PENALTY", fmt.Sprintf("%.06f", strategy.L2Penalty)},
+			{"SIGNALS_DROPOUT_RATE", fmt.Sprintf("%.06f", strategy.DropoutRate)},
+			{"SIGNALS_LEARN_RATE", fmt.Sprintf("%.06f", strategy.LearnRate)},
 		})
 		t.AppendSeparator()
 		t.AppendRows([]table.Row{

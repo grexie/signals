@@ -46,6 +46,10 @@ type ModelParams struct {
 	RSIUpperBound              float64
 	RSILowerBound              float64
 	RSISlope                   int
+
+	L2Penalty   float64
+	DropoutRate float64
+	LearnRate   float64
 }
 
 var DefaultModelParams = ModelParams{
