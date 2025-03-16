@@ -99,3 +99,8 @@ Support
 For issues, bug reports, or feature requests, please contact the project maintainers
 or submit an issue in the project repository.
 
+License
+-------
+
+This package is provided as-is with no warranty express or implied whatsoever. Ensure
+you configure API keys securely and trade responsibly.
