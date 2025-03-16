@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grexie/signals/pkg/candles"
 	"github.com/grexie/signals/pkg/genetics"
 	"github.com/grexie/signals/pkg/model"
 	"github.com/grexie/signals/pkg/trade"
@@ -70,15 +71,21 @@ func main() {
 		instrument = i
 	}
 
-	candles := model.Candles()
 	tp, sl := model.TakeProfit(), model.StopLoss()
 	leverage := model.Leverage()
 	tm := model.TradeMultiplier()
 	commission := model.Commission()
 
-	if len(os.Args) >= 2 && os.Args[1] == "optimize" {
-		Optimize(db, instrument)
-		return
+	if len(os.Args) >= 2 {
+		if os.Args[1] == "optimize" {
+			Optimize(db, instrument)
+			return
+		} else if os.Args[1] == "train" {
+			Train(db, instrument)
+			return
+		} else {
+			log.Fatalf("unknown command: %s", os.Args[1])
+		}
 	}
 
 	t := table.NewWriter()
@@ -87,7 +94,7 @@ func main() {
 	t.AppendRows([]table.Row{
 		{"SIGNALS_INSTRUMENT", instrument},
 		{"SIGNALS_WINDOW_SIZE", fmt.Sprintf("%d", model.WindowSize())},
-		{"SIGNALS_CANDLES", fmt.Sprintf("%d", candles)},
+		{"SIGNALS_CANDLES", fmt.Sprintf("%d", model.Candles())},
 		{"SIGNALS_TAKE_PROFIT", fmt.Sprintf("%0.04f", tp)},
 		{"SIGNALS_STOP_LOSS", fmt.Sprintf("%0.04f", sl)},
 		{"SIGNALS_LEVERAGE", fmt.Sprintf("%0.0f", leverage)},
@@ -160,7 +167,7 @@ func main() {
 
 	params := model.ModelParams{
 		WindowSize:                 model.WindowSize(),
-		StrategyCandles:            candles,
+		StrategyCandles:            model.Candles(),
 		StrategyLong:               tp / leverage,
 		StrategyShort:              tp / leverage,
 		StrategyHold:               sl / leverage,
@@ -193,6 +200,11 @@ func main() {
 		RSIUpperBound:              model.RSIUpperBound(),
 		RSILowerBound:              model.RSILowerBound(),
 		RSISlope:                   model.RSISlope(),
+	}
+
+	now := time.Now()
+	if _, err := candles.GetCandles(db, pw, instrument, candles.OKX, now.AddDate(-1, 0, 0), now); err != nil {
+		log.Fatalf("error fetching candles: %v", err)
 	}
 
 	if m, err := model.NewEnsembleModel(context.Background(), db, instrument, params, generationsDuration, generations); err != nil {
@@ -278,6 +290,70 @@ func main() {
 	}
 }
 
+func Train(db *leveldb.DB, instrument string) {
+	params := model.ModelParams{
+		WindowSize:                 model.WindowSize(),
+		StrategyCandles:            model.Candles(),
+		StrategyLong:               model.TakeProfit() / model.Leverage(),
+		StrategyShort:              model.TakeProfit() / model.Leverage(),
+		StrategyHold:               model.StopLoss() / model.Leverage(),
+		TradeCommission:            model.Commission(),
+		ShortMovingAverageLength:   model.ShortMovingAverageLength(),
+		LongMovingAverageLength:    model.LongMovingAverageLength(),
+		LongRSILength:              model.LongRSILength(),
+		ShortRSILength:             model.ShortRSILength(),
+		ShortMACDWindowLength:      model.ShortMACDWindowLength(),
+		LongMACDWindowLength:       model.LongMACDWindowLength(),
+		MACDSignalWindow:           model.MACDSignalWindow(),
+		FastShortMACDWindowLength:  model.FastShortMACDWindowLength(),
+		FastLongMACDWindowLength:   model.FastLongMACDWindowLength(),
+		FastMACDSignalWindow:       model.FastMACDSignalWindow(),
+		BollingerBandsWindow:       model.BollingerBandsWindow(),
+		BollingerBandsMultiplier:   model.BollingerBandsMultiplier(),
+		StochasticOscillatorWindow: model.StochasticOscillatorWindow(),
+		SlowATRPeriod:              model.SlowATRPeriod(),
+		FastATRPeriod:              model.FastATRPeriod(),
+		OBVMovingAverageLength:     model.OBVMovingAverageLength(),
+		VolumesMovingAverageLength: model.VolumesMovingAverageLength(),
+		ChaikinMoneyFlowPeriod:     model.ChaikinMoneyFlowPeriod(),
+		MoneyFlowIndexPeriod:       model.MoneyFlowIndexPeriod(),
+		RateOfChangePeriod:         model.RateOfChangePeriod(),
+		CCIPeriod:                  model.CCIPeriod(),
+		WilliamsRPeriod:            model.WilliamsRPeriod(),
+		PriceChangeFastPeriod:      model.PriceChangeFastPeriod(),
+		PriceChangeMediumPeriod:    model.PriceChangeMediumPeriod(),
+		PriceChangeSlowPeriod:      model.PriceChangeSlowPeriod(),
+		RSIUpperBound:              model.RSIUpperBound(),
+		RSILowerBound:              model.RSILowerBound(),
+		RSISlope:                   model.RSISlope(),
+	}
+
+	pw := progress.NewWriter()
+	pw.SetMessageLength(40)
+	pw.SetNumTrackersExpected(6)
+	pw.SetSortBy(progress.SortByPercentDsc)
+	pw.SetStyle(progress.StyleDefault)
+	pw.SetTrackerLength(15)
+	pw.SetTrackerPosition(progress.PositionRight)
+	pw.SetUpdateFrequency(time.Millisecond * 100)
+	pw.Style().Colors = progress.StyleColorsExample
+	pw.Style().Options.PercentFormat = "%2.0f%%"
+	go pw.Render()
+
+	now := time.Now()
+
+	if m, err := model.NewModel(context.Background(), pw, db, instrument, params, now.AddDate(0, 0, -28), now, true); err != nil {
+		log.Fatalf("error training model: %v", err)
+	} else {
+		pw.Stop()
+		for pw.IsRenderInProgress() {
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		m.Metrics.Write(os.Stdout)
+	}
+}
+
 func Optimize(db *leveldb.DB, instrument string) {
 	now := time.Now().Add(-5 * time.Minute)
 
@@ -292,6 +368,10 @@ func Optimize(db *leveldb.DB, instrument string) {
 	pw.Style().Colors = progress.StyleColorsExample
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
+
+	if _, err := candles.GetCandles(db, pw, instrument, candles.OKX, now.AddDate(-1, 0, 0), now); err != nil {
+		log.Fatalf("error fetching candles: %v", err)
+	}
 
 	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.4, 0.1)
 

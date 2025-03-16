@@ -192,6 +192,35 @@ func (pt *PaperTrader) MaxDrawdown() float64 {
 	return maxDrawdown * 100 // Convert to percentage
 }
 
+// filterOutliers removes extreme outlier returns (> 3 standard deviations from the mean)
+func filterOutliers(v []float64, ratio float64) []float64 {
+	if len(v) == 0 {
+		return v // Return empty slice if no returns exist
+	}
+
+	mean := stat.Mean(v, nil)
+	stdDev := stat.StdDev(v, nil)
+
+	// Define threshold for outliers (3 standard deviations from mean)
+	lowerBound := mean - ratio*stdDev
+	upperBound := mean + ratio*stdDev
+
+	// Filter returns within the valid range
+	filtered := []float64{}
+	for _, r := range v {
+		if r >= lowerBound && r <= upperBound {
+			filtered = append(filtered, r)
+		}
+	}
+
+	// If all values were outliers, return at least one value to prevent errors
+	if len(filtered) == 0 {
+		return []float64{mean}
+	}
+
+	return filtered
+}
+
 func (p *PaperTrader) SharpeRatio(riskFreeRate float64) float64 {
 	if len(p.ClosedTrades) == 0 {
 		return 0
@@ -213,13 +242,14 @@ func (p *PaperTrader) SharpeRatio(riskFreeRate float64) float64 {
 	meanReturn := sum / float64(len(returns))
 
 	// Compute standard deviation of returns
+	returns = filterOutliers(returns, 3)
 	for _, r := range returns {
 		variance += math.Pow(r-meanReturn, 2)
 	}
 	stdDev := math.Sqrt(variance / float64(len(returns)))
 
 	// Avoid divide-by-zero error
-	if stdDev == 0 {
+	if stdDev < 1e-6 {
 		return 0
 	}
 
@@ -233,28 +263,37 @@ func (p *PaperTrader) SortinoRatio(riskFreeRate float64) float64 {
 	}
 
 	returns := []float64{}
-	negReturns := []float64{}
 	for _, trade := range p.ClosedTrades {
-		if *trade.PercentageReturn < 0 {
-			negReturns = append(negReturns, *trade.PercentageReturn)
-		}
 		returns = append(returns, *trade.PercentageReturn)
 	}
 
-	if len(negReturns) == 0 {
-		return math.Inf(1)
-	}
-
-	meanReturn := stat.Mean(returns, nil)
-
-	// Compute standard deviation of returns
-	downsideDeviation := stat.StdDev(negReturns, nil)
-
-	// Avoid divide-by-zero error
-	if downsideDeviation == 0 {
+	// Edge Case: No returns
+	if len(returns) == 0 {
 		return 0
 	}
 
-	// Sharpe Ratio Formula
+	// Compute downside deviation properly
+	downsideSquaredSum := 0.0
+	count := 0
+	for _, r := range returns {
+		downside := math.Min(0, r-riskFreeRate)
+		downsideSquaredSum += downside * downside
+		count++
+	}
+
+	// Edge Case: No downside risk
+	if count == 0 {
+		return 5 // Assign a reasonable high Sortino instead of Inf
+	}
+
+	downsideDeviation := math.Sqrt(downsideSquaredSum / float64(count))
+
+	// Avoid divide-by-zero error
+	if downsideDeviation < 1e-6 {
+		return 5
+	}
+
+	// Sortino Ratio Formula
+	meanReturn := stat.Mean(returns, nil)
 	return (meanReturn - riskFreeRate) / downsideDeviation
 }

@@ -86,7 +86,7 @@ var DefaultModelParams = ModelParams{
 	RSISlope:                   3,
 }
 
-func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
+func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
 	features := [][]float64{}
 
 	if len(candles) <= params.WindowSize {
@@ -218,7 +218,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) []float64 {
 		features = append(features, currentFeatures)
 	}
 
-	return features[len(features)-1]
+	return features
 }
 
 // Improved data preparation

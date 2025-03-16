@@ -6,8 +6,8 @@ import (
 	"io"
 	"log"
 	"math"
+	"math/rand/v2"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/syndtr/goleveldb/leveldb"
+	"gonum.org/v1/gonum/stat"
 	"gorgonia.org/tensor"
 )
 
@@ -113,18 +114,52 @@ type ModelMetrics struct {
 
 	Samples []int
 
-	PnL          float64
-	MaxDrawdown  float64
-	SharpeRatio  float64
-	SortinoRatio float64
-	Trades       int
+	Backtest DeepBacktestMetrics
+}
+
+func safeValue(v float64, def float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return def
+	} else {
+		return v
+	}
+}
+
+func tradeFactor(trades float64, maxTrades float64) float64 {
+	trades = safeValue(trades, 0)
+	if trades <= maxTrades {
+		return math.Min(1.8*math.Tanh(trades*0.25), 1.5) // Normal scaling up to 30 trades
+	}
+	return 1.5 * math.Exp(-(trades-maxTrades)/10) // Exponential decay penalty for trades > 30
 }
 
 func (m *ModelMetrics) Fitness() float64 {
-	avgF1 := (m.F1Scores[0] + m.F1Scores[1] + m.F1Scores[2]) / 3
-	drawdownPenalty := 1 / (1 + m.MaxDrawdown/100) // Penalizes high drawdowns
+	avgF1 := (m.F1Scores[0] + m.F1Scores[1] + m.F1Scores[2]) / 300
+	normPnL := math.Tanh(safeValue(m.Backtest.Mean.PnL, 0) / 150)      // smoother scaling
+	sharpe := math.Tanh(safeValue(m.Backtest.Mean.SharpeRatio, 0) / 3) // Smoother scaling
+	sortino := math.Tanh(safeValue(m.Backtest.Mean.SortinoRatio, 0) / 3)
+	drawdownPenalty := math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0) / 50) // Less extreme penalty
 
-	fitness := (avgF1*0.15 + m.SortinoRatio*0.3 + m.SharpeRatio*0.2 + m.PnL*0.15) * drawdownPenalty
+	// Cap trade rewards to prevent overtrading dominance
+	tradeFactor := tradeFactor(safeValue(m.Backtest.Mean.Trades, 0), 24) // Cap trade rewards
+
+	// Risk-Adjusted Return Modifier: Rewards per-trade profitability
+	riskRewardFactor := math.Tanh((safeValue(m.Backtest.Mean.PnL, 0) / math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1)) * 0.1)
+
+	// Compute base fitness
+	fitness := avgF1*0.15 + sortino*0.3 + sharpe*0.2 + normPnL*0.15
+
+	// add drawdown penalty
+	fitness *= drawdownPenalty
+
+	// add trade factor to incentivize trades without making too many trades (tanh modifier)
+	fitness *= tradeFactor
+
+	// incentivize per trade profitability
+	fitness *= (1 + riskRewardFactor*0.15)
+
+	fitness = safeValue(fitness, 0)
+
 	return fitness
 }
 
@@ -190,13 +225,16 @@ func (m ModelMetrics) Write(w io.Writer) error {
 	t = table.NewWriter()
 	t.SetOutputMirror(w)
 	t.SetTitle("Trading Metrics")
+	t.AppendHeader(table.Row{"", "MEAN", "MIN", "MAX", "STDDEV"})
 	t.AppendRows([]table.Row{
-		{"PnL", fmt.Sprintf("%6.2f%%", m.PnL)},
-		{"Max Drawdown", fmt.Sprintf("%6.2f%%", m.MaxDrawdown)},
-		{"Sharpe Ratio", fmt.Sprintf("%6.2f", m.SharpeRatio)},
-		{"Sortino Ratio", fmt.Sprintf("%6.2f", m.SortinoRatio)},
-		{"Trades", fmt.Sprintf("%d", m.Trades)},
+		{"PnL", fmt.Sprintf("%6.2f%%", m.Backtest.Mean.PnL), fmt.Sprintf("%6.2f%%", m.Backtest.Min.PnL), fmt.Sprintf("%6.2f%%", m.Backtest.Max.PnL), fmt.Sprintf("%6.2f", m.Backtest.StdDev.PnL)},
+		{"Max Drawdown", fmt.Sprintf("%6.2f%%", m.Backtest.Mean.MaxDrawdown), fmt.Sprintf("%6.2f%%", m.Backtest.Min.MaxDrawdown), fmt.Sprintf("%6.2f%%", m.Backtest.Max.MaxDrawdown), fmt.Sprintf("%6.2f", m.Backtest.StdDev.MaxDrawdown)},
+		{"Sharpe Ratio", fmt.Sprintf("%6.2f", m.Backtest.Mean.SharpeRatio), fmt.Sprintf("%6.2f", m.Backtest.Min.SharpeRatio), fmt.Sprintf("%6.2f", m.Backtest.Max.SharpeRatio), fmt.Sprintf("%6.2f", m.Backtest.StdDev.SharpeRatio)},
+		{"Sortino Ratio", fmt.Sprintf("%6.2f", m.Backtest.Mean.SortinoRatio), fmt.Sprintf("%6.2f", m.Backtest.Min.SortinoRatio), fmt.Sprintf("%6.2f", m.Backtest.Max.SortinoRatio), fmt.Sprintf("%6.2f", m.Backtest.StdDev.SortinoRatio)},
+		{"Trades", fmt.Sprintf("%6.2f", m.Backtest.Mean.Trades), fmt.Sprintf("%6.2f", m.Backtest.Min.Trades), fmt.Sprintf("%6.2f", m.Backtest.Max.Trades), fmt.Sprintf("%6.2f", m.Backtest.StdDev.Trades)},
 	})
+	t.AppendSeparator()
+	t.AppendRow(table.Row{"Fitness", fmt.Sprintf("%6.4f", m.Fitness())})
 	t.Render()
 
 	return nil
@@ -268,7 +306,10 @@ func calculateMetrics(confusionMatrix [][]int, total int) ModelMetrics {
 }
 
 func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, params ModelParams, from time.Time, to time.Time, fetch bool) (*Model, error) {
-	candles := candles.GetCandles(db, pw, instrument, candles.OKX, from, to)
+	candles, err := candles.GetCandles(db, nil, instrument, candles.OKX, from, to)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(candles) == 0 {
 		return nil, fmt.Errorf("no candle data received")
@@ -296,7 +337,7 @@ func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrumen
 		return nil, fmt.Errorf("training error: %v", err)
 	} else {
 		tracker := &progress.Tracker{
-			Message: "Testing",
+			Message: "Validation",
 			Total:   int64(len(testingFeatures)),
 			Units:   progress.UnitsDefault,
 		}
@@ -342,48 +383,11 @@ func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrumen
 			Metrics:    metrics,
 		}
 
-		backtestingCandles := []int{}
-		end := to.Truncate(time.Minute)
-		start := end.AddDate(0, 0, -7)
-
-		for i, candle := range candles {
-			if candle.Timestamp.After(start) && candle.Timestamp.Before(end) {
-				backtestingCandles = append(backtestingCandles, i)
-			}
+		if backtest, err := m.DeepBacktest(pw, instrument, params, to); err != nil {
+			return nil, err
+		} else {
+			m.Metrics.Backtest = backtest
 		}
-		slices.SortFunc(backtestingCandles, func(a, b int) int {
-			return candles[a].Timestamp.Compare(candles[b].Timestamp)
-		})
-
-		tracker = &progress.Tracker{
-			Message: "Backtesting for PnL",
-			Total:   int64(len(backtestingCandles)),
-			Units:   progress.UnitsDefault,
-		}
-		pw.AppendTracker(tracker)
-		tracker.Start()
-		trader := NewPaperTrader(10000, params.StrategyHold, params.StrategyLong, params.TradeCommission/2, Leverage())
-
-		for _, i := range backtestingCandles {
-			trader.Iterate(candles[i], func(c Candle) Strategy {
-				features := PrepareForPrediction(candles[i-params.WindowSize*2:i+1], params)
-				pred, err := Predict(m.weights, features)
-				if err != nil {
-					log.Println("prediction error:", err)
-					return StrategyHold
-				}
-
-				prediction := argmax(pred)
-				return Strategy(prediction)
-			})
-			tracker.Increment(1)
-		}
-
-		m.Metrics.PnL = trader.PnL()
-		m.Metrics.MaxDrawdown = trader.MaxDrawdown()
-		m.Metrics.SharpeRatio = trader.SharpeRatio(0.0)
-		m.Metrics.Trades = len(trader.ClosedTrades)
-		tracker.MarkAsDone()
 
 		return m, nil
 	}
@@ -403,11 +407,15 @@ func argmax(slice []float64) int {
 
 type Prediction map[Strategy]float64
 
-func (m *Model) Predict(pw progress.Writer, feature []float64, now time.Time, fetch bool) ([]float64, Prediction, error) {
+func (m *Model) Predict(pw progress.Writer, feature []float64, now time.Time) ([]float64, Prediction, error) {
 	if feature == nil {
 		from := now.Truncate(time.Minute).Add(-time.Duration(WindowSize()*2) * time.Minute)
-		candles := candles.GetCandles(m.db, pw, m.Instrument, candles.OKX, from, now)
-		feature = PrepareForPrediction(candles, m.params)
+		candles, err := candles.GetCandles(m.db, pw, m.Instrument, candles.OKX, from, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		features := PrepareForPrediction(candles, m.params)
+		feature = features[len(features)-1]
 	}
 
 	pred, err := Predict(m.weights, feature)
@@ -420,4 +428,161 @@ func (m *Model) Predict(pw progress.Writer, feature []float64, now time.Time, fe
 		prediction[Strategy(i)] = pred[i]
 	}
 	return feature, prediction, nil
+}
+
+type BacktestMetrics struct {
+	PnL          float64
+	MaxDrawdown  float64
+	SharpeRatio  float64
+	SortinoRatio float64
+	Trades       float64
+}
+
+func (m *Model) CalculateCandlesForBacktest(params ModelParams, start time.Time, end time.Time) int {
+	return int(end.Sub(start) / time.Minute)
+}
+
+func (m *Model) Backtest(pw progress.Writer, iterate func(), instrument string, params ModelParams, start time.Time, end time.Time) (BacktestMetrics, error) {
+	candles, err := candles.GetCandles(m.db, pw, instrument, candles.OKX, start.Add(-time.Duration(params.WindowSize)*time.Minute), end)
+	if err != nil {
+		return BacktestMetrics{}, err
+	}
+
+	features := PrepareForPrediction(candles, params)
+	trader := NewPaperTrader(10000, params.StrategyHold, params.StrategyLong, params.TradeCommission/2, Leverage())
+
+	for i := params.WindowSize; i < len(candles); i++ {
+		trader.Iterate(candles[i], func(c Candle) Strategy {
+			pred, err := Predict(m.weights, features[i-params.WindowSize])
+			if err != nil {
+				log.Println("prediction error:", err)
+				return StrategyHold
+			}
+
+			prediction := argmax(pred)
+			return Strategy(prediction)
+		})
+		if iterate != nil {
+			iterate()
+		}
+	}
+
+	days := float64(end.Sub(start).Hours() / 24)
+	return BacktestMetrics{
+		PnL:          (math.Pow(1.0+trader.PnL()/100.0, 1.0/days) - 1) * 100,
+		MaxDrawdown:  trader.MaxDrawdown(),
+		SharpeRatio:  trader.SharpeRatio(0),
+		SortinoRatio: trader.SortinoRatio(0),
+		Trades:       float64(len(trader.ClosedTrades)) / days,
+	}, nil
+}
+
+type backtest struct {
+	Start time.Time
+	End   time.Time
+}
+
+type DeepBacktestMetrics struct {
+	Mean   BacktestMetrics
+	Min    BacktestMetrics
+	Max    BacktestMetrics
+	StdDev BacktestMetrics
+}
+
+func NewDeepBacktestMetrics(metrics []BacktestMetrics) DeepBacktestMetrics {
+	pnl := make([]float64, len(metrics))
+	maxDrawdown := make([]float64, len(metrics))
+	sharpeRatio := make([]float64, len(metrics))
+	sortinoRatio := make([]float64, len(metrics))
+	trades := make([]float64, len(metrics))
+
+	out := DeepBacktestMetrics{}
+
+	for i, r := range metrics {
+		pnl[i] = r.PnL
+		maxDrawdown[i] = r.MaxDrawdown
+		sharpeRatio[i] = r.SharpeRatio
+		sortinoRatio[i] = r.SortinoRatio
+		trades[i] = r.Trades
+
+		if i == 0 {
+			out.Min.PnL = pnl[i]
+			out.Min.MaxDrawdown = maxDrawdown[i]
+			out.Min.SharpeRatio = sharpeRatio[i]
+			out.Min.SortinoRatio = sortinoRatio[i]
+			out.Min.Trades = trades[i]
+
+			out.Max.PnL = pnl[i]
+			out.Max.MaxDrawdown = maxDrawdown[i]
+			out.Max.SharpeRatio = sharpeRatio[i]
+			out.Max.SortinoRatio = sortinoRatio[i]
+			out.Max.Trades = trades[i]
+		} else {
+			out.Min.PnL = math.Min(out.Min.PnL, pnl[i])
+			out.Min.MaxDrawdown = math.Min(out.Min.MaxDrawdown, maxDrawdown[i])
+			out.Min.SharpeRatio = math.Min(out.Min.SharpeRatio, sharpeRatio[i])
+			out.Min.SortinoRatio = math.Min(out.Min.SortinoRatio, sortinoRatio[i])
+			out.Min.Trades = math.Min(out.Min.Trades, trades[i])
+
+			out.Max.PnL = math.Max(out.Max.PnL, pnl[i])
+			out.Max.MaxDrawdown = math.Max(out.Max.MaxDrawdown, maxDrawdown[i])
+			out.Max.SharpeRatio = math.Max(out.Max.SharpeRatio, sharpeRatio[i])
+			out.Max.SortinoRatio = math.Max(out.Max.SortinoRatio, sortinoRatio[i])
+			out.Max.Trades = math.Max(out.Max.Trades, trades[i])
+		}
+	}
+
+	out.Mean.PnL = stat.Mean(pnl, nil)
+	out.Mean.MaxDrawdown = stat.Mean(maxDrawdown, nil)
+	out.Mean.SharpeRatio = stat.Mean(sharpeRatio, nil)
+	out.Mean.SortinoRatio = stat.Mean(sortinoRatio, nil)
+	out.Mean.Trades = stat.Mean(trades, nil)
+
+	out.StdDev.PnL = stat.StdDev(pnl, nil)
+	out.StdDev.MaxDrawdown = stat.StdDev(maxDrawdown, nil)
+	out.StdDev.SharpeRatio = stat.StdDev(sharpeRatio, nil)
+	out.StdDev.SortinoRatio = stat.StdDev(sortinoRatio, nil)
+	out.StdDev.Trades = stat.StdDev(trades, nil)
+
+	return out
+}
+
+func (m *Model) DeepBacktest(pw progress.Writer, instrument string, params ModelParams, now time.Time) (DeepBacktestMetrics, error) {
+	now = now.Truncate(time.Minute)
+
+	backtestCandles := 0
+	backtests := []backtest{}
+	backtestResults := []BacktestMetrics{}
+	for q := range 4 {
+		q := now.AddDate(0, -3*q, 0)
+
+		for _, d := range []int{7, 14, 28} {
+			start := q.AddDate(0, 0, -int(rand.Float64()*60)-d)
+			end := start.AddDate(0, 0, d)
+			backtests = append(backtests, backtest{Start: start, End: end})
+			backtestCandles += m.CalculateCandlesForBacktest(params, start, end)
+		}
+	}
+
+	tracker := &progress.Tracker{
+		Message: "Backtesting",
+		Total:   int64(backtestCandles),
+		Units:   progress.UnitsDefault,
+	}
+	pw.AppendTracker(tracker)
+	tracker.Start()
+
+	for _, backtest := range backtests {
+		if r, err := m.Backtest(pw, func() {
+			tracker.Increment(1)
+		}, instrument, params, backtest.Start, backtest.End); err != nil {
+			return DeepBacktestMetrics{}, err
+		} else {
+			backtestResults = append(backtestResults, r)
+		}
+	}
+
+	tracker.MarkAsDone()
+
+	return NewDeepBacktestMetrics(backtestResults), nil
 }

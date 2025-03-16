@@ -15,15 +15,25 @@ type candleRequest struct {
 	Instrument string
 	Start      time.Time
 	End        time.Time
-	Response   chan Candle
+	Response   chan candleResponse
 }
 
 var (
-	apiClient = resty.New()
+	apiClient = resty.New().
+		SetRetryCount(10).
+		SetRetryWaitTime(200 * time.Millisecond).
+		SetRetryMaxWaitTime(5 * time.Second)
 )
 
-func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, network Network, candles []Candle, from time.Time, to time.Time) chan Candle {
-	from = from.Truncate(time.Minute)
+type candleResponse struct {
+	Candle Candle
+	Err    error
+}
+
+func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, network Network, candles []Candle, from time.Time, to time.Time) chan candleResponse {
+	if !from.Equal(from.Truncate(time.Minute)) {
+		from = from.Add(time.Minute).Truncate(time.Minute)
+	}
 	to = to.Truncate(time.Minute)
 
 	missingIntervals := []struct {
@@ -36,33 +46,52 @@ func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, 
 	})
 
 	// identify missing intervals
-	previousTime := from.Add(-1 * time.Minute)
-	for _, candle := range candles {
-		if candle.Timestamp.Equal(previousTime.Add(time.Minute)) {
-			previousTime = candle.Timestamp
-			continue
-		} else if candle.Timestamp.After(to) {
-			break
-		} else {
-			missingIntervals = append(missingIntervals, struct {
-				start time.Time
-				end   time.Time
-			}{
-				start: previousTime,
-				end:   candle.Timestamp,
-			})
-			previousTime = candle.Timestamp
-			continue
-		}
-	}
-	if previousTime.Before(to) {
+	var previousTime time.Time
+	if len(candles) == 0 || candles[0].Timestamp.After(from) {
 		missingIntervals = append(missingIntervals, struct {
 			start time.Time
 			end   time.Time
 		}{
-			start: previousTime,
+			start: from, // Ensure fetching starts exactly at `from`
 			end:   to,
 		})
+	} else {
+		previousTime = from.Add(-time.Minute)
+
+		for _, candle := range candles {
+			if candle.Timestamp.After(to) {
+				break
+			}
+
+			if !candle.Timestamp.Equal(previousTime.Add(time.Minute)) {
+				missingIntervals = append(missingIntervals, struct {
+					start time.Time
+					end   time.Time
+				}{
+					start: previousTime.Add(time.Minute),      // Adjust to the next expected candle
+					end:   candle.Timestamp.Add(-time.Minute), // Avoid overlap
+				})
+			}
+
+			previousTime = candle.Timestamp
+		}
+
+		if previousTime.Add(time.Minute).Before(to) {
+			missingIntervals = append(missingIntervals, struct {
+				start time.Time
+				end   time.Time
+			}{
+				start: previousTime.Add(time.Minute), // Start from the next expected minute
+				end:   to,
+			})
+		}
+	}
+
+	out := make(chan candleResponse, 100)
+
+	if len(missingIntervals) == 0 {
+		close(out)
+		return out
 	}
 
 	var tracker *progress.Tracker
@@ -80,8 +109,6 @@ func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, 
 		tracker.Start()
 	}
 
-	out := make(chan Candle, 100)
-
 	switch network {
 	case OKX:
 		okxFetcherInitOnce.Do(func() {
@@ -91,10 +118,10 @@ func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, 
 		go func() {
 			defer close(out)
 
-			channels := make([]chan Candle, len(missingIntervals))
+			channels := make([]chan candleResponse, len(missingIntervals))
 
 			for i, interval := range missingIntervals {
-				channels[i] = make(chan Candle, 100)
+				channels[i] = make(chan candleResponse, 100)
 
 				okxFetchQueue <- candleRequest{
 					Instrument: instrument,
@@ -105,8 +132,8 @@ func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, 
 			}
 
 			for _, ch := range channels {
-				for candle := range ch {
-					out <- candle
+				for candleResponse := range ch {
+					out <- candleResponse
 					if tracker != nil {
 						tracker.Increment(1)
 					}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"slices"
 	"sync"
@@ -57,6 +58,19 @@ func NewEnsembleModel(ctx context.Context, db *leveldb.DB, instrument string, pa
 					log.Printf("training model: generation %d", generation+1)
 					generation++
 					now = now.Add(frequency)
+					e.mutex.Lock()
+					slices.SortFunc(e.Models, func(a *Model, b *Model) int {
+						aw := 6*(math.Tanh(a.Metrics.Backtest.Mean.SharpeRatio/3)+1) + 12*(math.Tanh(a.Metrics.Backtest.Mean.SortinoRatio/3)+1)
+						bw := 6*(math.Tanh(b.Metrics.Backtest.Mean.SharpeRatio/3)+1) + 12*(math.Tanh(b.Metrics.Backtest.Mean.SortinoRatio/3)+1)
+						if aw < bw {
+							return -1
+						}
+						if aw > bw {
+							return 1
+						}
+						return 0
+					})
+					e.mutex.Unlock()
 					e.AddModel(ctx, db, instrument, params, frequency, now)
 					e.EvictModel(0)
 				}
@@ -123,13 +137,13 @@ func (e *EnsembleModel) Predict(pw progress.Writer, now time.Time) (Strategy, St
 
 	feature := []float64(nil)
 	for _, m := range models {
-		f, prediction, err := m.Predict(pw, feature, now, true)
+		f, prediction, err := m.Predict(pw, feature, now)
 		if err != nil {
 			return StrategyHold, votes, err
 		}
 		feature = f
 
-		weight := m.Metrics.SharpeRatio*5 + m.Metrics.SortinoRatio*10
+		weight := 6*(math.Tanh(m.Metrics.Backtest.Mean.SharpeRatio/3)+1) + 12*(math.Tanh(m.Metrics.Backtest.Mean.SortinoRatio/3)+1)
 		for s, v := range prediction {
 			votes.Vote(s, v*weight)
 		}

@@ -11,17 +11,17 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-func GetCandles(db *leveldb.DB, pw progress.Writer, instrument string, network Network, start, end time.Time) []Candle {
+func GetCandles(db *leveldb.DB, pw progress.Writer, instrument string, network Network, start, end time.Time) ([]Candle, error) {
 	out := []Candle{}
 
 	for i := start.Truncate(time.Hour); i.Before(end); i = i.Add(time.Hour) {
-		iter := db.NewIterator(util.BytesPrefix(fmt.Appendf([]byte{}, "%s-%s-1m-%s", instrument, network, i.Format("2006-01-02T15:"))), nil)
+		iter := db.NewIterator(util.BytesPrefix(fmt.Appendf([]byte{}, "%s-%s-1m-%s", instrument, network, i.UTC().Format("2006-01-02T15:"))), nil)
 		for iter.Next() {
 			var candle Candle
 			if err := json.Unmarshal(iter.Value(), &candle); err != nil {
 				continue
 			}
-			if candle.Timestamp.After(start) && candle.Timestamp.Before(end) {
+			if (candle.Timestamp.Equal(start) || candle.Timestamp.After(start)) && (candle.Timestamp.Equal(end) || candle.Timestamp.Before(end)) {
 				out = append(out, candle)
 			}
 		}
@@ -35,9 +35,14 @@ func GetCandles(db *leveldb.DB, pw progress.Writer, instrument string, network N
 		return a.Timestamp.Equal(b.Timestamp)
 	})
 
-	for candle := range fetchMissingCandles(db, pw, instrument, network, out, start, end) {
-		if candle.Timestamp.After(start) && candle.Timestamp.Before(end) {
-			out = append(out, candle)
+	for candleResponse := range fetchMissingCandles(db, pw, instrument, network, out, start, end) {
+		if candleResponse.Err != nil {
+			return nil, candleResponse.Err
+		} else {
+			candle := candleResponse.Candle
+			if (candle.Timestamp.Equal(start) || candle.Timestamp.After(start)) && (candle.Timestamp.Equal(end) || candle.Timestamp.Before(end)) {
+				out = append(out, candle)
+			}
 		}
 	}
 
@@ -49,5 +54,5 @@ func GetCandles(db *leveldb.DB, pw progress.Writer, instrument string, network N
 		return a.Timestamp.Equal(b.Timestamp)
 	})
 
-	return out
+	return out, nil
 }
