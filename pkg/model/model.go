@@ -37,64 +37,44 @@ func safeValue(v float64, def float64) float64 {
 	}
 }
 
-func tradeFactor(trades float64, maxTrades float64) float64 {
-	trades = safeValue(trades, 0)
-	if trades <= maxTrades {
-		return math.Min(1.5*math.Tanh(trades*0.15), 1.2) // Reduce incentive for excessive trades
-	}
-	return 1.2 * math.Exp(-(trades-maxTrades)/3) // Harsher penalty for too many trades
-}
-
 func (m *ModelMetrics) Fitness() float64 {
 	avgF1 := (m.F1Scores[0] + m.F1Scores[1] + m.F1Scores[2]) / 300
-	normPnL := math.Tanh(safeValue(m.Backtest.Mean.PnL, 0) / 100)      // smoother scaling
-	sharpe := math.Tanh(safeValue(m.Backtest.Mean.SharpeRatio, 0) / 3) // Smoother scaling
-	sortino := math.Tanh(safeValue(m.Backtest.Mean.SortinoRatio, 0) / 3)
-	drawdownPenalty := math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0) / 25) // Less extreme penalty
+	normPnL := safeValue(m.Backtest.Mean.PnL, 0) / 100      // Linear scaling instead of Tanh
+	sharpe := safeValue(m.Backtest.Mean.SharpeRatio, 0) / 3 // Smoother scaling
+	sortino := safeValue(m.Backtest.Mean.SortinoRatio, 0) / 3
 
-	// Penalize high variance across backtests
-	variancePenalty := 1 / (1 + safeValue(m.Backtest.StdDev.PnL, 0)/5) // The divisor controls penalty strength
+	// Reduce drawdown penalty
+	drawdownPenalty := math.Max(0.5, 1.0-(safeValue(m.Backtest.Min.MaxDrawdown, 0)/100)) // Scale 0.5 - 1.0
 
-	// Cap trade rewards to prevent overtrading dominance
-	tradeFactor := tradeFactor(safeValue(m.Backtest.Mean.Trades, 0), 30) // Cap trade rewards
+	// Reduce variance penalty
+	variancePenalty := math.Max(0.5, 1.0-(safeValue(m.Backtest.StdDev.PnL, 0)/50)) // Scale 0.5 - 1.0
 
-	// Risk-Adjusted Return Modifier: Rewards per-trade profitability
-	riskRewardFactor := math.Tanh((safeValue(m.Backtest.Mean.PnL, 0) / math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1)) * 0.1)
+	// Trade Factor: Reward balanced trading
+	tradeFactor := math.Max(0.5, 1.5*math.Tanh(safeValue(m.Backtest.Mean.Trades, 0)*0.05)) // Reward moderate trading
 
-	// Apply PnL Penalty to Encourage Profitability
-	pnlPenalty := 1 / (1 + math.Exp(-safeValue(m.Backtest.Mean.PnL, 0)/4))
+	// Risk-Adjusted Return Modifier
+	riskRewardFactor := 1.0 + math.Tanh((safeValue(m.Backtest.Mean.PnL, 0)/math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1))*0.1)*0.2 // Keep impact small
 
 	// Compute base fitness
-	fitness := avgF1*0.15 + sortino*0.3 + sharpe*0.2 + normPnL*0.15
+	fitness := (avgF1 * 0.25) + (sortino * 0.25) + (sharpe * 0.2) + (normPnL * 0.3) // More balanced
 
-	// Apply all penalties
+	// Apply penalties and modifiers
 	fitness *= drawdownPenalty
 	fitness *= tradeFactor
-	fitness *= (1 + riskRewardFactor*0.15)
 	fitness *= variancePenalty
-	fitness *= (1 + pnlPenalty*0.2)
+	fitness *= riskRewardFactor
 
+	// Encourage Positive PnL
 	if m.Backtest.Mean.PnL > 0 {
-		fitness *= 1.8 + (m.Backtest.Mean.PnL / 50) // Increased reward for positive PnL
-	} else {
-		fitness *= math.Exp(m.Backtest.Mean.PnL / 50) // Exponentially penalize losses
+		fitness *= (1.2 + (m.Backtest.Mean.PnL / 200)) // Small linear boost for positive PnL
 	}
 
+	// Prevent total wipeout strategies
 	if m.Backtest.Min.MaxDrawdown >= 99.5 {
-		fitness *= 0.01 // Extreme penalty for total wipeout
-	} else if m.Backtest.Min.MaxDrawdown >= 95 {
-		fitness *= 0.1 // Strong penalty
+		fitness *= 0.05 // Harsh penalty
 	}
 
-	tradeFactor_ := 1.0
-	if m.Backtest.Mean.Trades > 20 {
-		tradeFactor_ = math.Exp(-0.1 * (m.Backtest.Mean.Trades - 20)) // Exponential penalty after 20 trades
-	}
-	fitness *= tradeFactor_
-
-	fitness = safeValue(fitness, 0)
-
-	return fitness
+	return safeValue(fitness, 0)
 }
 
 type Model struct {
