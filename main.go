@@ -377,7 +377,7 @@ func Optimize(db *leveldb.DB, instrument string) {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 
-	strategy := genetics.NaturalSelection(db, instrument, now, 50, 20, 0.45, 0.25, 3)
+	strategy := genetics.NaturalSelection(db, instrument, now, 100, 20, 0.45, 0.25, 5)
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
