@@ -29,8 +29,8 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 	batchSize := 2048
 
 	// Hyperparameters
-	dropoutRate := 0.3
-	l2Penalty := 0.01
+	dropoutRate := 0.4
+	l2Penalty := 0.05
 	validateEvery := 5
 	patience := 10
 
