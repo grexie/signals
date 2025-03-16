@@ -7,8 +7,6 @@ import (
 	"log"
 	"math"
 	"math/rand/v2"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/grexie/signals/pkg/candles"
@@ -17,127 +15,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"gonum.org/v1/gonum/stat"
 	"gorgonia.org/tensor"
-)
-
-func envInt(name string, def func() int, dec func(v int) int) func() int {
-	return func() int {
-		value := def()
-		if v, ok := os.LookupEnv(name); ok {
-			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
-				log.Fatalf("failed to parse env.%s: %v", name, err)
-			} else {
-				value = int(v)
-			}
-		}
-		return dec(value)
-	}
-}
-
-func envFloat64(name string, def func() float64, dec func(v float64) float64) func() float64 {
-	return func() float64 {
-		value := def()
-		if v, ok := os.LookupEnv(name); ok {
-			if v, err := strconv.ParseFloat(v, 64); err != nil {
-				log.Fatalf("failed to parse env.%s: %v", name, err)
-			} else {
-				value = v
-			}
-		}
-		return dec(value)
-	}
-}
-
-func envString(name string, def func() string) func() string {
-	return func() string {
-		value := def()
-		if v, ok := os.LookupEnv(name); ok {
-			value = v
-		}
-		return value
-	}
-}
-
-func envDuration(name string, def func() time.Duration) func() time.Duration {
-	return func() time.Duration {
-		value := def()
-		if v, ok := os.LookupEnv(name); ok {
-			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
-				log.Fatalf("failed to parse env.%s: %v", name, err)
-			} else {
-				value = time.Duration(v) * time.Second
-			}
-		}
-		return value
-	}
-}
-
-var (
-	Instrument = envString("SIGNALS_INSTRUMENT", func() string { return "DOGE-USDT-SWAP" })
-	Cooldown   = envDuration("SIGNALS_COOLDOWN", func() time.Duration { return 5 * time.Minute })
-)
-
-var (
-	WindowSize = envInt("SIGNALS_WINDOW_SIZE", func() int {
-		return 200
-	}, BoundWindowSize)
-	Candles = envInt("SIGNALS_CANDLES", func() int {
-		return 5
-	}, BoundCandles)
-)
-
-var (
-	TakeProfit = envFloat64("SIGNALS_TAKE_PROFIT", func() float64 {
-		return 0.4
-	}, BoundTakeProfit)
-	StopLoss = envFloat64("SIGNALS_STOP_LOSS", func() float64 {
-		return 0.1
-	}, BoundStopLoss)
-	TradeMultiplier = envFloat64("SIGNALS_TRADE_MULTIPLIER", func() float64 {
-		return 1.0
-	}, func(v float64) float64 { return math.Max(0.5, math.Min(2, v)) })
-	Leverage = envFloat64("SIGNALS_LEVERAGE", func() float64 {
-		return 50.0
-	}, func(v float64) float64 { return math.Max(1, math.Min(100, v)) })
-	Commission = envFloat64("SIGNALS_COMMISSION", func() float64 {
-		return 0.001
-	}, func(v float64) float64 { return math.Max(0, math.Min(0.5, v)) })
-)
-
-var (
-	ShortMovingAverageLength   = envInt("SIGNALS_SHORT_MOVING_AVERAGE_LENGTH", func() int { return 50 }, BoundShortMovingAverageLength)
-	LongMovingAverageLength    = envInt("SIGNALS_LONG_MOVING_AVERAGE_LENGTH", func() int { return 200 }, BoundLongMovingAverageLength)
-	LongRSILength              = envInt("SIGNALS_LONG_RSI_LENGTH", func() int { return 14 }, BoundLongRSILength)
-	ShortRSILength             = envInt("SIGNALS_SHORT_RSI_LENGTH", func() int { return 5 }, BoundShortRSILength)
-	ShortMACDWindowLength      = envInt("SIGNALS_SHORT_MACD_WINDOW_LENGTH", func() int { return 12 }, BoundShortMACDWindowLength)
-	LongMACDWindowLength       = envInt("SIGNALS_LONG_MACD_WINDOW_LENGTH", func() int { return 26 }, BoundLongMACDWindowLength)
-	MACDSignalWindow           = envInt("SIGNALS_MACD_SIGNAL_WINDOW", func() int { return 9 }, BoundMACDSignalWindow)
-	FastShortMACDWindowLength  = envInt("SIGNALS_FAST_SHORT_MACD_WINDOW_LENGTH", func() int { return 5 }, BoundFastShortMACDWindowLength)
-	FastLongMACDWindowLength   = envInt("SIGNALS_FAST_LONG_MACD_WINDOW_LENGTH", func() int { return 35 }, BoundFastLongMACDWindowLength)
-	FastMACDSignalWindow       = envInt("SIGNALS_FAST_MACD_SIGNAL_WINDOW", func() int { return 5 }, BoundFastMACDSignalWindow)
-	BollingerBandsWindow       = envInt("SIGNALS_BOLLINGER_BANDS_WINDOW", func() int { return 20 }, BoundBollingerBandsWindow)
-	BollingerBandsMultiplier   = envFloat64("SIGNALS_BOLLINGER_BANDS_MULTIPLIER", func() float64 { return 2.0 }, BoundBollingerBandsMultiplier)
-	StochasticOscillatorWindow = envInt("SIGNALS_STOCHASTIC_OSCILLATOR_WINDOW", func() int { return 14 }, BoundStochasticOscillatorWindow)
-	SlowATRPeriod              = envInt("SIGNALS_SLOW_ATR_PERIOD_WINDOW", func() int { return 14 }, BoundSlowATRPeriod)
-	FastATRPeriod              = envInt("SIGNALS_FAST_ATR_PERIOD_WINDOW", func() int { return 20 }, BoundFastATRPeriod)
-	OBVMovingAverageLength     = envInt("SIGNALS_OBV_MOVING_AVERAGE_LENGTH", func() int { return 20 }, BoundOBVMovingAverageLength)
-	VolumesMovingAverageLength = envInt("SIGNALS_VOLUMES_MOVING_AVERAGE_LENGTH", func() int { return 20 }, BoundVolumesMovingAverageLength)
-	ChaikinMoneyFlowPeriod     = envInt("SIGNALS_CHAIKIN_MONEY_FLOW_PERIOD", func() int { return 20 }, BoundChaikinMoneyFlowPeriod)
-	MoneyFlowIndexPeriod       = envInt("SIGNALS_MONEY_FLOW_INDEX_PERIOD", func() int { return 14 }, BoundMoneyFlowIndexPeriod)
-	RateOfChangePeriod         = envInt("SIGNALS_RATE_OF_CHANGE_PERIOD", func() int { return 14 }, BoundRateOfChangePeriod)
-	CCIPeriod                  = envInt("SIGNALS_CCI_PERIOD", func() int { return 20 }, BoundCCIPeriod)
-	WilliamsRPeriod            = envInt("SIGNALS_WILLIAMS_R_PERIOD", func() int { return 14 }, BoundWilliamsRPeriod)
-	PriceChangeFastPeriod      = envInt("SIGNALS_PRICE_CHANGE_FAST_PERIOD", func() int { return 60 }, BoundPriceChangeFastPeriod)
-	PriceChangeMediumPeriod    = envInt("SIGNALS_PRICE_CHANGE_MEDIUM_PERIOD", func() int { return 240 }, BoundPriceChangeMediumPeriod)
-	PriceChangeSlowPeriod      = envInt("SIGNALS_PRICE_CHANGE_SLOW_PERIOD", func() int { return 1440 }, BoundPriceChangeSlowPeriod)
-	RSIUpperBound              = envFloat64("SIGNALS_RSI_UPPER_BOUND", func() float64 { return 50.0 }, BoundRSIUpperBound)
-	RSILowerBound              = envFloat64("SIGNALS_RSI_LOWER_BOUND", func() float64 { return 50.0 }, BoundRSILowerBound)
-	RSISlope                   = envInt("SIGNALS_RSI_SLOPE", func() int { return 3 }, BoundRSISlope)
-)
-
-var (
-	DropoutRate = envFloat64("SIGNALS_DROPOUT_RATE", func() float64 { return 0.4 }, BoundDropoutRate)
-	L2Penalty   = envFloat64("SIGNALS_L2_PENALTY", func() float64 { return 0.05 }, BoundL2Penalty)
-	LearnRate   = envFloat64("SIGNALS_LEARN_RATE", func() float64 { return 0.00005 }, BoundLearnRate)
 )
 
 type ModelMetrics struct {
