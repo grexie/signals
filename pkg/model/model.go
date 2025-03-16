@@ -162,6 +162,22 @@ func (m *ModelMetrics) Fitness() float64 {
 	fitness *= variancePenalty
 	fitness *= (1 + pnlPenalty*0.2)
 
+	if m.Backtest.Mean.PnL > 0 {
+		fitness *= 1.5 + (m.Backtest.Mean.PnL / 100) // Reward positive PnL
+	} else {
+		fitness *= math.Exp(m.Backtest.Mean.PnL / 50) // Exponentially penalize losses
+	}
+
+	if m.Backtest.Min.MaxDrawdown >= 99 {
+		fitness *= 0.1 // Harsh penalty for full account wipeout
+	}
+
+	tradeFactor_ := 1.0
+	if m.Backtest.Mean.Trades > 20 {
+		tradeFactor_ = math.Exp(-0.1 * (m.Backtest.Mean.Trades - 20)) // Exponential penalty after 20 trades
+	}
+	fitness *= tradeFactor_
+
 	fitness = safeValue(fitness, 0)
 
 	return fitness
