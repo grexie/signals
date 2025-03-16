@@ -131,7 +131,7 @@ func Train(pw progress.Writer, features [][]float64, labels []float64, epochs in
 
 	// Configure solver
 	solver := gorgonia.NewAdamSolver(
-		gorgonia.WithLearnRate(0.0001),
+		gorgonia.WithLearnRate(0.00005),
 		gorgonia.WithBeta1(0.9),
 		gorgonia.WithBeta2(0.999),
 		gorgonia.WithEps(1e-8),
