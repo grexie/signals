@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grexie/signals/pkg/model"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -161,15 +162,20 @@ func NewStrategyVotes() StrategyVotes {
 }
 
 func (s StrategyVotes) Strategy() Strategy {
-	maxVotes := float64(0)
-	maxVotesStrategy := StrategyHold
-	for s, v := range s {
-		if maxVotes < v {
-			maxVotes = v
-			maxVotesStrategy = s
-		}
+	totalVotes := float64(0)
+	for _, v := range s {
+		totalVotes += v
 	}
-	return maxVotesStrategy
+
+	p := model.MinTradeProbability()
+
+	if s[StrategyLong] > totalVotes*p && s[StrategyShort] < totalVotes*p {
+		return StrategyLong
+	} else if s[StrategyShort] > totalVotes*p && s[StrategyLong] < totalVotes*p {
+		return StrategyShort
+	} else {
+		return StrategyHold
+	}
 }
 
 func (s StrategyVotes) Vote(strategy Strategy, votes float64) {
