@@ -61,6 +61,7 @@ type Strategy struct {
 	L2Penalty   float64
 	DropoutRate float64
 	LearnRate   float64
+	TrainDays   float64
 
 	ModelMetrics *model.ModelMetrics
 }
@@ -115,6 +116,7 @@ func newStrategy(instrument string) Strategy {
 		L2Penalty:   model.BoundL2Penalty(model.L2Penalty()),
 		DropoutRate: model.BoundDropoutRate(model.DropoutRate()),
 		LearnRate:   model.BoundLearnRate(model.LearnRate()),
+		TrainDays:   model.BoundTrainDaysFloat64(float64(model.TrainDays()) / (24 * float64(time.Hour))),
 	}
 }
 
@@ -160,6 +162,7 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.L2Penalty = model.BoundL2Penalty(s.L2Penalty * randPercent(percent))
 	s.DropoutRate = model.BoundDropoutRate(s.DropoutRate * randPercent(percent))
 	s.LearnRate = model.BoundLearnRate(s.LearnRate * randPercent(percent))
+	s.TrainDays = model.BoundTrainDaysFloat64(s.TrainDays * randPercent(percent))
 }
 
 func StrategyToParams(s Strategy) model.ModelParams {
@@ -209,6 +212,7 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		L2Penalty:   s.L2Penalty,
 		DropoutRate: s.DropoutRate,
 		LearnRate:   s.LearnRate,
+		TrainDays:   time.Duration(s.TrainDays * float64(time.Hour) * 24),
 	}
 }
 
@@ -216,7 +220,7 @@ func StrategyToParams(s Strategy) model.ModelParams {
 func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, now time.Time, s Strategy) *model.ModelMetrics {
 	params := StrategyToParams(s)
 
-	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now.AddDate(0, -3, 0), now, false); err != nil {
+	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now); err != nil {
 		return &model.ModelMetrics{}
 	} else {
 		return &m.Metrics
@@ -322,6 +326,7 @@ func crossover(parent1, parent2 Strategy) Strategy {
 		L2Penalty:   selectValue(parent1.L2Penalty, parent2.L2Penalty),
 		DropoutRate: selectValue(parent1.DropoutRate, parent2.DropoutRate),
 		LearnRate:   selectValue(parent1.LearnRate, parent2.LearnRate),
+		TrainDays:   selectValue(parent1.TrainDays, parent2.TrainDays),
 	}
 }
 
@@ -408,6 +413,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		sharpes := []float64{}
 		sortinos := []float64{}
 		trades := []float64{}
+		trainDays := []float64{}
 		newPopulation := make([]Strategy, 0, popSize)
 		for s := range results {
 			newPopulation = append(newPopulation, s)
@@ -417,6 +423,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			sharpes = append(sharpes, s.ModelMetrics.Backtest.Mean.SharpeRatio)
 			sortinos = append(sortinos, s.ModelMetrics.Backtest.Mean.SortinoRatio)
 			trades = append(trades, s.ModelMetrics.Backtest.Mean.Trades)
+			trainDays = append(trainDays, s.TrainDays)
 		}
 
 		tracker.MarkAsDone()
@@ -482,6 +489,10 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			{"Sharpe Ratio", fmt.Sprintf("%0.2f", stat.Mean(sharpes, nil)), fmt.Sprintf("%0.2f", minFloats(sharpes)), fmt.Sprintf("%0.2f", maxFloats(sharpes)), fmt.Sprintf("%0.6f", stat.StdDev(sharpes, nil))},
 			{"Sortino Ratio", fmt.Sprintf("%0.2f", stat.Mean(sortinos, nil)), fmt.Sprintf("%0.2f", minFloats(sortinos)), fmt.Sprintf("%0.2f", maxFloats(sortinos)), fmt.Sprintf("%0.6f", stat.StdDev(sortinos, nil))},
 			{"Trades", fmt.Sprintf("%0.2f", stat.Mean(trades, nil)), fmt.Sprintf("%0.2f", minFloats(trades)), fmt.Sprintf("%0.2f", maxFloats(trades)), fmt.Sprintf("%0.6f", stat.StdDev(trades, nil))},
+		})
+		t.AppendSeparator()
+		t.AppendRows([]table.Row{
+			{"Train Days", fmt.Sprintf("%0.2f", stat.Mean(trainDays, nil)), fmt.Sprintf("%0.2f", minFloats(trainDays)), fmt.Sprintf("%0.2f", maxFloats(trainDays)), fmt.Sprintf("%0.6f", stat.StdDev(trainDays, nil))},
 		})
 		t.Render()
 

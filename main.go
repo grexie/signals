@@ -212,7 +212,7 @@ func Train(db *leveldb.DB, instrument string) {
 
 	now := time.Now()
 
-	if m, err := model.NewModel(context.Background(), pw, db, instrument, params, now.AddDate(0, 0, -28), now, true); err != nil {
+	if m, err := model.NewModel(context.Background(), pw, db, instrument, params, now); err != nil {
 		log.Fatalf("error training model: %v", err)
 	} else {
 		pw.Stop()

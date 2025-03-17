@@ -276,3 +276,11 @@ func BoundCooldown(v time.Duration) time.Duration {
 func BoundCooldownFloat64(v float64) float64 {
 	return math.Max(60, math.Min(3600, v))
 }
+
+func BoundTrainDays(v time.Duration) time.Duration {
+	return time.Duration(math.Max(14, math.Min(180, v.Hours()/24)) * float64(time.Hour*24))
+}
+
+func BoundTrainDaysFloat64(v float64) float64 {
+	return math.Max(14, math.Min(180, v))
+}

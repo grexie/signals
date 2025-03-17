@@ -106,7 +106,7 @@ func (e *EnsembleModel) AddModel(ctx context.Context, db *leveldb.DB, instrument
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
 
-	if m, err := NewModel(ctx, pw, db, instrument, params, timestamp.AddDate(0, -1, 0), timestamp, true); err != nil {
+	if m, err := NewModel(ctx, pw, db, instrument, params, timestamp); err != nil {
 		return err
 	} else {
 		pw.Stop()

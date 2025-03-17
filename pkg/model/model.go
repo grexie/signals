@@ -20,7 +20,10 @@ type Model struct {
 	Metrics    ModelMetrics
 }
 
-func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, params ModelParams, from time.Time, to time.Time, fetch bool) (*Model, error) {
+func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrument string, params ModelParams, now time.Time) (*Model, error) {
+	to := now
+	from := to.Add(-params.TrainDays)
+
 	candles, err := candles.GetCandles(db, nil, instrument, candles.OKX, from, to)
 	if err != nil {
 		return nil, err

@@ -60,6 +60,7 @@ type ModelParams struct {
 	L2Penalty   float64
 	DropoutRate float64
 	LearnRate   float64
+	TrainDays   time.Duration
 }
 
 func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
@@ -83,6 +84,7 @@ func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
 		fmt.Sprintf("SIGNALS_L2_PENALTY=%.06f", m.L2Penalty),
 		fmt.Sprintf("SIGNALS_DROPOUT_RATE=%.06f", m.DropoutRate),
 		fmt.Sprintf("SIGNALS_LEARN_RATE=%.06f", m.LearnRate),
+		fmt.Sprintf("SIGNALS_TRAIN_DAYS=%0.02f", m.TrainDays.Hours()/24),
 		"",
 		fmt.Sprintf("SIGNALS_SHORT_MOVING_AVERAGE_LENGTH=%d", m.ShortMovingAverageLength),
 		fmt.Sprintf("SIGNALS_LONG_MOVING_AVERAGE_LENGTH=%d", m.LongMovingAverageLength),
@@ -189,6 +191,7 @@ func NewModelParamsFromDefaults() ModelParams {
 		L2Penalty:   L2Penalty(),
 		DropoutRate: DropoutRate(),
 		LearnRate:   LearnRate(),
+		TrainDays:   TrainDays(),
 	}
 }
 
@@ -238,6 +241,20 @@ func envDuration(name string, def func() time.Duration, dec func(v time.Duration
 				log.Fatalf("failed to parse env.%s: %v", name, err)
 			} else {
 				value = time.Duration(v) * time.Second
+			}
+		}
+		return dec(value)
+	}
+}
+
+func envDays(name string, def func() time.Duration, dec func(v time.Duration) time.Duration) func() time.Duration {
+	return func() time.Duration {
+		value := def()
+		if v, ok := os.LookupEnv(name); ok {
+			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
+				log.Fatalf("failed to parse env.%s: %v", name, err)
+			} else {
+				value = time.Duration(v) * 24 * time.Hour
 			}
 		}
 		return dec(value)
@@ -317,4 +334,5 @@ var (
 	DropoutRate = envFloat64("SIGNALS_DROPOUT_RATE", func() float64 { return 0.4 }, BoundDropoutRate)
 	L2Penalty   = envFloat64("SIGNALS_L2_PENALTY", func() float64 { return 0.05 }, BoundL2Penalty)
 	LearnRate   = envFloat64("SIGNALS_LEARN_RATE", func() float64 { return 0.00005 }, BoundLearnRate)
+	TrainDays   = envDays("SIGNALS_TRAIN_DAYS", func() time.Duration { return 30 * time.Hour }, BoundTrainDays)
 )
