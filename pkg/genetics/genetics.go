@@ -215,6 +215,9 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		DropoutRate: s.DropoutRate,
 		LearnRate:   s.LearnRate,
 		TrainDays:   time.Duration(s.TrainDays * float64(time.Hour) * 24),
+
+		BatchSize:       model.BatchSize(),
+		HiddenLayerSize: model.HiddenLayerSize(),
 	}
 }
 
