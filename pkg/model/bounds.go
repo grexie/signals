@@ -266,7 +266,7 @@ func BoundLearnRate(v float64) float64 {
 }
 
 func BoundMinTradeProbability(v float64) float64 {
-	return math.Max(0.3, math.Min(1, v))
+	return math.Max(0.3, math.Min(0.9, v))
 }
 
 func BoundCooldown(v time.Duration) time.Duration {
