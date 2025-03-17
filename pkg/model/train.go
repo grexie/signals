@@ -22,11 +22,11 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 
 	// Network architecture with explicit shapes
 	inputSize := len(features[0])
-	hiddenSize1 := 64
-	hiddenSize2 := 32
-	hiddenSize3 := 16
+	hiddenSize1 := params.HiddenLayerSize
+	hiddenSize2 := hiddenSize1 / 2
+	hiddenSize3 := hiddenSize2 / 2
 	outputSize := 3
-	batchSize := 2048
+	batchSize := params.BatchSize
 
 	// Hyperparameters
 	dropoutRate := params.DropoutRate // 0.4

@@ -16,6 +16,9 @@ import (
 type ModelParams struct {
 	Instrument string
 
+	BatchSize       int
+	HiddenLayerSize int
+
 	WindowSize int
 	Candles    int
 	TakeProfit float64
@@ -81,6 +84,8 @@ func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
 		"",
 		fmt.Sprintf("SIGNALS_MIN_TRADE_PROBABILITY=%0.04f", m.MinTradeProbability),
 		"",
+		fmt.Sprintf("SIGNALS_BATCH_SIZE=%d", m.BatchSize),
+		fmt.Sprintf("SIGNALS_HIDDEN_LAYER_SIZE=%d", m.HiddenLayerSize),
 		fmt.Sprintf("SIGNALS_L2_PENALTY=%.06f", m.L2Penalty),
 		fmt.Sprintf("SIGNALS_DROPOUT_RATE=%.06f", m.DropoutRate),
 		fmt.Sprintf("SIGNALS_LEARN_RATE=%.06f", m.LearnRate),
@@ -188,10 +193,12 @@ func NewModelParamsFromDefaults() ModelParams {
 		RSILowerBound:              RSILowerBound(),
 		RSISlope:                   RSISlope(),
 
-		L2Penalty:   L2Penalty(),
-		DropoutRate: DropoutRate(),
-		LearnRate:   LearnRate(),
-		TrainDays:   TrainDays(),
+		BatchSize:       BatchSize(),
+		HiddenLayerSize: HiddenLayerSize(),
+		L2Penalty:       L2Penalty(),
+		DropoutRate:     DropoutRate(),
+		LearnRate:       LearnRate(),
+		TrainDays:       TrainDays(),
 	}
 }
 
@@ -331,8 +338,10 @@ var (
 )
 
 var (
-	DropoutRate = envFloat64("SIGNALS_DROPOUT_RATE", func() float64 { return 0.4 }, BoundDropoutRate)
-	L2Penalty   = envFloat64("SIGNALS_L2_PENALTY", func() float64 { return 0.05 }, BoundL2Penalty)
-	LearnRate   = envFloat64("SIGNALS_LEARN_RATE", func() float64 { return 0.00005 }, BoundLearnRate)
-	TrainDays   = envDays("SIGNALS_TRAIN_DAYS", func() time.Duration { return 30 * time.Hour }, BoundTrainDays)
+	BatchSize       = envInt("SIGNALS_BATCH_SIZE", func() int { return 32 }, BoundBatchSize)
+	HiddenLayerSize = envInt("SIGNALS_HIDDEN_LAYER_SIZE", func() int { return 128 }, BoundHiddenLayerSize)
+	DropoutRate     = envFloat64("SIGNALS_DROPOUT_RATE", func() float64 { return 0.4 }, BoundDropoutRate)
+	L2Penalty       = envFloat64("SIGNALS_L2_PENALTY", func() float64 { return 0.05 }, BoundL2Penalty)
+	LearnRate       = envFloat64("SIGNALS_LEARN_RATE", func() float64 { return 0.00005 }, BoundLearnRate)
+	TrainDays       = envDays("SIGNALS_TRAIN_DAYS", func() time.Duration { return 30 * time.Hour }, BoundTrainDays)
 )

@@ -74,6 +74,11 @@ Runs the genetic algorithm to evolve the best trading strategy based on historic
 
 ./signals optimize
 
+The optimizer will output a CSV file containing useful stats from each generation, including
+the best strategy (by fitness score) and its parameters from that generation. Each generation
+outputs to the console useful stats, including a copy and pastable set of model parameters 
+for the best strategy in that generation.
+
 2. Train & Backtest a Model
 
 Trains a basic model using the configured parameters, performs deep backtesting, and

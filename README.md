@@ -62,6 +62,11 @@ To run the natural selection algorithm for optimizing trading models:
 ./signals optimize
 ```
 
+The optimizer will output a CSV file containing useful stats from each generation, including
+the best strategy (by fitness score) and its parameters from that generation. Each generation
+outputs to the console useful stats, including a copy and pastable set of model parameters 
+for the best strategy in that generation.
+
 ### Training a Basic Model
 
 To train a model using the configured parameters and perform deep backtesting:
