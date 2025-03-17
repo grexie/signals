@@ -251,10 +251,10 @@ func envDays(name string, def func() time.Duration, dec func(v time.Duration) ti
 	return func() time.Duration {
 		value := def()
 		if v, ok := os.LookupEnv(name); ok {
-			if v, err := strconv.ParseInt(v, 10, 32); err != nil {
+			if v, err := strconv.ParseFloat(v, 64); err != nil {
 				log.Fatalf("failed to parse env.%s: %v", name, err)
 			} else {
-				value = time.Duration(v) * 24 * time.Hour
+				value = time.Duration(v * 24 * float64(time.Hour))
 			}
 		}
 		return dec(value)
