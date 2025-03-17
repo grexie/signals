@@ -2,7 +2,9 @@ package genetics
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"log"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -347,8 +349,47 @@ func worker(ctx context.Context, db *leveldb.DB, pw progress.Writer, tracker *pr
 	}
 }
 
+func maxFloats(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	out := v[0]
+	for i := 1; i < len(v); i++ {
+		if out < v[i] {
+			out = v[i]
+		}
+	}
+	return out
+}
+
+func minFloats(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	out := v[0]
+	for i := 1; i < len(v); i++ {
+		if out > v[i] {
+			out = v[i]
+		}
+	}
+	return out
+}
+
 // Main Genetic Algorithm
 func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize, generations int, retainRate, mutationRate float64, eliteCount int) Strategy {
+	file, err := os.OpenFile(fmt.Sprintf("optimizer-%s.csv", now.Format("2006-01-02-15-04-05")), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	if stat, _ := file.Stat(); stat.Size() == 0 {
+		WriteCSVHeader(writer)
+	}
+
 	// Initialize random population
 	population := make([]Strategy, popSize)
 	population[0] = newStrategy(instrument)
@@ -453,31 +494,6 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		// Best strategy of this generation
 		strategy := population[0]
 
-		maxFloats := func(v []float64) float64 {
-			if len(v) == 0 {
-				return 0
-			}
-			out := v[0]
-			for i := 1; i < len(v); i++ {
-				if out < v[i] {
-					out = v[i]
-				}
-			}
-			return out
-		}
-		minFloats := func(v []float64) float64 {
-			if len(v) == 0 {
-				return 0
-			}
-			out := v[0]
-			for i := 1; i < len(v); i++ {
-				if out > v[i] {
-					out = v[i]
-				}
-			}
-			return out
-		}
-
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.SetTitle(fmt.Sprintf("Generation %d - Summary", gen))
@@ -499,6 +515,10 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		params := StrategyToParams(strategy)
 		params.Write(os.Stdout, fmt.Sprintf("Generation %d - Best Strategy", gen), false)
 		strategy.ModelMetrics.Write(os.Stdout)
+
+		if err := WriteCSVRow(writer, gen, fitnesses, pnls, maxDrawdowns, sharpes, sortinos, trades, trainDays, params, &strategy); err != nil {
+			log.Fatalf("error writing csv: %v", err)
+		}
 	}
 
 	return population[0] // Return the best-performing strategy
