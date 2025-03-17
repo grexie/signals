@@ -216,7 +216,7 @@ func StrategyToParams(s Strategy) model.ModelParams {
 func evaluateFitness(ctx context.Context, pw progress.Writer, db *leveldb.DB, now time.Time, s Strategy) *model.ModelMetrics {
 	params := StrategyToParams(s)
 
-	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now.AddDate(0, -1, 0), now, false); err != nil {
+	if m, err := model.NewModel(ctx, pw, db, s.Instrument, params, now.AddDate(-1, 0, 0), now, false); err != nil {
 		return &model.ModelMetrics{}
 	} else {
 		return &m.Metrics
