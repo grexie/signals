@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grexie/signals/pkg/model"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -167,7 +166,7 @@ func (s StrategyVotes) Strategy() Strategy {
 		totalVotes += v
 	}
 
-	p := model.MinTradeProbability()
+	p := MinTradeProbability()
 
 	if s[StrategyLong] > totalVotes*p && s[StrategyShort] < totalVotes*p {
 		return StrategyLong
