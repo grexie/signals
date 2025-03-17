@@ -230,7 +230,7 @@ func envString(name string, def func() string) func() string {
 	}
 }
 
-func envDuration(name string, def func() time.Duration) func() time.Duration {
+func envDuration(name string, def func() time.Duration, dec func(v time.Duration) time.Duration) func() time.Duration {
 	return func() time.Duration {
 		value := def()
 		if v, ok := os.LookupEnv(name); ok {
@@ -240,13 +240,13 @@ func envDuration(name string, def func() time.Duration) func() time.Duration {
 				value = time.Duration(v) * time.Second
 			}
 		}
-		return value
+		return dec(value)
 	}
 }
 
 var (
 	Instrument = envString("SIGNALS_INSTRUMENT", func() string { return "DOGE-USDT-SWAP" })
-	Cooldown   = envDuration("SIGNALS_COOLDOWN", func() time.Duration { return 5 * time.Minute })
+	Cooldown   = envDuration("SIGNALS_COOLDOWN", func() time.Duration { return 5 * time.Minute }, BoundCooldown)
 )
 
 var (

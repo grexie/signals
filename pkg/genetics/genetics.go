@@ -25,6 +25,8 @@ type Strategy struct {
 	TakeProfit float64
 	StopLoss   float64
 
+	Cooldown float64
+
 	MinTradeProbability float64
 
 	ShortMovingAverageLength   float64
@@ -77,6 +79,8 @@ func newStrategy(instrument string) Strategy {
 		StopLoss:   model.BoundStopLoss(model.StopLoss()),
 		TakeProfit: model.BoundTakeProfit(model.TakeProfit()),
 
+		Cooldown: model.BoundCooldownFloat64(float64(model.Cooldown().Seconds())),
+
 		MinTradeProbability: model.BoundMinTradeProbability(model.MinTradeProbability()),
 
 		ShortMovingAverageLength:   model.BoundShortMovingAverageLengthFloat64(float64(model.ShortMovingAverageLength())),
@@ -120,6 +124,8 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.TakeProfit = model.BoundTakeProfit(s.TakeProfit * randPercent(percent))
 	s.StopLoss = model.BoundStopLoss(s.StopLoss * randPercent(percent))
 
+	s.Cooldown = model.BoundCooldownFloat64(s.Cooldown * randPercent(percent))
+
 	s.MinTradeProbability = model.BoundMinTradeProbability(s.MinTradeProbability * randPercent(percent))
 
 	s.ShortMovingAverageLength = model.BoundShortMovingAverageLengthFloat64(s.ShortMovingAverageLength * randPercent(percent))
@@ -162,7 +168,7 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		Leverage:        model.Leverage(),
 		TradeMultiplier: model.TradeMultiplier(),
 		Commission:      model.Commission(),
-		Cooldown:        model.Cooldown(),
+		Cooldown:        time.Duration(s.Cooldown * float64(time.Second)),
 
 		WindowSize: int(s.WindowSize),
 		Candles:    int(s.Candles),
@@ -279,6 +285,8 @@ func crossover(parent1, parent2 Strategy) Strategy {
 		Candles:    selectValue(parent1.Candles, parent2.Candles),
 		TakeProfit: selectValue(parent1.TakeProfit, parent2.TakeProfit),
 		StopLoss:   selectValue(parent1.StopLoss, parent2.StopLoss),
+
+		Cooldown: selectValue(parent1.Cooldown, parent2.Cooldown),
 
 		MinTradeProbability: selectValue(parent1.MinTradeProbability, parent2.MinTradeProbability),
 

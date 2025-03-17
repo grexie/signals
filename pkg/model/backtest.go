@@ -30,7 +30,7 @@ func (m *Model) Backtest(pw progress.Writer, iterate func(), instrument string, 
 	}
 
 	features := PrepareForPrediction(candles, params)
-	trader := NewPaperTrader(10000, params.StopLoss, params.TakeProfit, params.Commission/2, Leverage())
+	trader := NewPaperTrader(10000, params.StopLoss, params.TakeProfit, params.Commission/2, Leverage(), params.Cooldown)
 
 	for i := params.WindowSize; i < len(candles); i++ {
 		trader.Iterate(candles[i], func(c Candle) Strategy {

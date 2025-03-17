@@ -18,6 +18,8 @@ type PaperTrader struct {
 	TakeProfitPercent float64
 	TradeFeePercent   float64
 	Leverage          float64
+	Cooldown          time.Duration
+	NotBefore         *time.Time
 }
 
 // Trade represents an open or closed trade
@@ -34,7 +36,7 @@ type Trade struct {
 }
 
 // NewPaperTrader initializes a new paper trader
-func NewPaperTrader(startingCapital, stopLossPercent, takeProfitPercent, tradeFeePercent, leverage float64) *PaperTrader {
+func NewPaperTrader(startingCapital, stopLossPercent, takeProfitPercent, tradeFeePercent, leverage float64, cooldown time.Duration) *PaperTrader {
 	return &PaperTrader{
 		Capital:           startingCapital,
 		StartingCapital:   startingCapital,
@@ -42,6 +44,7 @@ func NewPaperTrader(startingCapital, stopLossPercent, takeProfitPercent, tradeFe
 		TakeProfitPercent: takeProfitPercent,
 		TradeFeePercent:   tradeFeePercent,
 		Leverage:          leverage,
+		Cooldown:          cooldown,
 	}
 }
 
@@ -95,7 +98,11 @@ func (pt *PaperTrader) Iterate(candle Candle, predict func(Candle) Strategy) {
 	if pt.OpenTrade == nil {
 		signal := predict(candle)
 		if signal != StrategyHold {
-			pt.AddTrade(candle.Close, signal == StrategyLong)
+			if pt.NotBefore == nil || pt.NotBefore.Before(candle.Timestamp) {
+				notBefore := candle.Timestamp.Add(pt.Cooldown)
+				pt.NotBefore = &notBefore
+				pt.AddTrade(candle.Close, signal == StrategyLong)
+			}
 		}
 		return
 	} else {

@@ -1,6 +1,9 @@
 package model
 
-import "math"
+import (
+	"math"
+	"time"
+)
 
 // General Strategy Parameters
 func BoundWindowSize(v int) int {
@@ -264,4 +267,12 @@ func BoundLearnRate(v float64) float64 {
 
 func BoundMinTradeProbability(v float64) float64 {
 	return math.Max(0.3, math.Min(1, v))
+}
+
+func BoundCooldown(v time.Duration) time.Duration {
+	return time.Duration(math.Max(60, math.Min(3600, v.Seconds())) * float64(time.Second))
+}
+
+func BoundCooldownFloat64(v float64) float64 {
+	return math.Max(60, math.Min(3600, v))
 }
