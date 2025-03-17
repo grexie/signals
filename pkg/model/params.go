@@ -277,7 +277,7 @@ var (
 )
 
 var (
-	MinTradeProbability = envFloat64("MIN_TRADE_PROBABILITY", func() float64 {
+	MinTradeProbability = envFloat64("SIGNALS_MIN_TRADE_PROBABILITY", func() float64 {
 		return 0.5
 	}, BoundMinTradeProbability)
 )
