@@ -43,10 +43,10 @@ func (m *ModelMetrics) Fitness() float64 {
 	variancePenalty := 1.0 / (1.0 + safeValue(m.Backtest.StdDev.PnL, 0)/10)
 
 	// Trade Factor: Encourages balanced trading (range: ~0.5 to 1.5)
-	tradeFactor := 0.5 + 1.0*math.Tanh(safeValue(m.Backtest.Mean.Trades, 0)*0.05)
+	tradeFactor := 0.2 + 1.3*math.Tanh(safeValue(m.Backtest.Mean.Trades, 0)*0.1)
 
 	// Risk-Adjusted Return Modifier (range: ~0.8 to 1.2)
-	riskRewardFactor := 0.8 + 0.4*math.Tanh((safeValue(m.Backtest.Mean.PnL, 0)/math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1))*0.1)
+	riskRewardFactor := 0.6 + 0.6*math.Tanh((safeValue(m.Backtest.Mean.PnL, 0)/math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1))*0.05)
 
 	// PnL Reward Factor: Increases fitness for profitable models (range: ~0.8 to 1.5)
 	pnlReward := 0.8 + 0.7*math.Exp(safeValue(m.Backtest.Mean.PnL, 0)/100)
