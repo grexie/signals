@@ -142,7 +142,7 @@ func (m *Model) DeepBacktest(pw progress.Writer, instrument string, params Model
 	for q := range 4 {
 		q := now.AddDate(0, -3*q, 0)
 
-		for _, d := range []int{7, 14, 28} {
+		for _, d := range []int{7, 7, 7, 14, 14, 14, 28, 28, 28} {
 			start := q.AddDate(0, 0, -int(rand.Float64()*60)-d)
 			end := start.AddDate(0, 0, d)
 			backtests = append(backtests, backtest{Start: start, End: end})
