@@ -311,25 +311,27 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		for j := 1; j <= params.Candles; j++ {
 			highestHigh = math.Max(highestHigh, candles[i+j].High)
 			lowestLow = math.Min(lowestLow, candles[i+j].Low)
-		}
 
-		potentialGain := (highestHigh - basePrice) / basePrice
-		potentialLoss := (basePrice - lowestLow) / basePrice
-		actualChange := (closingPrice - basePrice) / basePrice
+			potentialGain := (highestHigh - basePrice) / basePrice
+			potentialLoss := (basePrice - lowestLow) / basePrice
+			actualChange := (closingPrice - basePrice) / basePrice
 
-		// Enhanced signal generation with trend confirmation
-		if potentialGain >= params.TakeProfit &&
-			actualChange > 0 &&
-			rsi14[i] > params.RSIUpperBound &&
-			rsiSlope > 0 &&
-			macd[i] > macdSignal[i] {
-			label = StrategyLong
-		} else if potentialLoss >= params.TakeProfit &&
-			actualChange < 0 &&
-			rsi14[i] < params.RSILowerBound &&
-			rsiSlope < 0 &&
-			macd[i] < macdSignal[i] {
-			label = StrategyShort
+			// Enhanced signal generation with trend confirmation
+			if potentialGain >= params.TakeProfit &&
+				potentialLoss < params.StopLoss &&
+				actualChange > 0 &&
+				rsi14[i] > params.RSIUpperBound &&
+				rsiSlope > 0 &&
+				macd[i] > macdSignal[i] {
+				label = StrategyLong
+			} else if potentialLoss >= params.TakeProfit &&
+				potentialGain < params.StopLoss &&
+				actualChange < 0 &&
+				rsi14[i] < params.RSILowerBound &&
+				rsiSlope < 0 &&
+				macd[i] < macdSignal[i] {
+				label = StrategyShort
+			}
 		}
 
 		labels = append(labels, float64(label))
