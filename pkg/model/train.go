@@ -144,8 +144,6 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 	bestWeights := make([]tensor.Tensor, 4)
 
 	for epoch := range epochs {
-		tracker.SetValue(int64(epoch + 1))
-
 		// Training phase
 		trainLoss := 0.0
 		batches := trainSize / batchSize
@@ -221,7 +219,7 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 			avgValidLoss := validLoss / float64(validBatches)
 
 			// Early stopping check
-			if avgValidLoss < bestLoss {
+			if epoch == 0 || avgValidLoss < bestLoss {
 				bestLoss = avgValidLoss
 				noImprovementCount = 0
 				// Save best weights
@@ -244,6 +242,8 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 		if epoch%5 == 0 {
 			runtime.GC()
 		}
+
+		tracker.SetValue(int64(epoch + 1))
 	}
 
 	tracker.MarkAsDone()
