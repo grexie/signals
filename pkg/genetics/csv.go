@@ -66,6 +66,8 @@ func WriteCSVHeader(writer *csv.Writer) error {
 
 		"SIGNALS_MIN_TRADE_PROBABILITY (Best Strategy)",
 
+		"SIGNALS_BATCH_SIZE (Best Strategy)",
+		"SIGNALS_HIDDEN_LAYER_SIZE (Best Strategy)",
 		"SIGNALS_L2_PENALTY (Best Strategy)",
 		"SIGNALS_DROPOUT_RATE (Best Strategy)",
 		"SIGNALS_LEARN_RATE (Best Strategy)",
@@ -151,6 +153,8 @@ func WriteCSVRow(writer *csv.Writer, generation int, started time.Time, ended ti
 
 		fmt.Sprintf("%0.04f", params.MinTradeProbability),
 
+		fmt.Sprintf("%d", params.BatchSize),
+		fmt.Sprintf("%d", params.HiddenLayerSize),
 		fmt.Sprintf("%.06f", params.L2Penalty),
 		fmt.Sprintf("%.06f", params.DropoutRate),
 		fmt.Sprintf("%.06f", params.LearnRate),

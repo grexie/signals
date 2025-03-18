@@ -300,3 +300,19 @@ func BoundHiddenLayerSize(v int) int {
 func BoundHiddenLayerSizeFloat64(v float64) float64 {
 	return math.Max(8, math.Min(512, v))
 }
+
+func BoundBatchSizeLog2(v int) int {
+	return int(math.Max(4, math.Min(15, float64(v)))) // [log2(16), log2(32768)]
+}
+
+func BoundBatchSizeLog2Float64(v float64) float64 {
+	return math.Max(4, math.Min(15, float64(v)))
+}
+
+func BoundHiddenLayerSizeLog2(v int) int {
+	return int(math.Max(3, math.Min(9, float64(v))))
+}
+
+func BoundHiddenLayerSizeLog2Float64(v float64) float64 {
+	return math.Max(3, math.Min(9, v))
+}

@@ -60,10 +60,12 @@ type Strategy struct {
 	RSILowerBound              float64
 	RSISlope                   float64
 
-	L2Penalty   float64
-	DropoutRate float64
-	LearnRate   float64
-	TrainDays   float64
+	BatchSizeLog2       float64
+	HiddenLayerSizeLog2 float64
+	L2Penalty           float64
+	DropoutRate         float64
+	LearnRate           float64
+	TrainDays           float64
 
 	ModelMetrics *model.ModelMetrics
 }
@@ -77,10 +79,12 @@ func newStrategy(instrument string) Strategy {
 	return Strategy{
 		Instrument: instrument,
 
-		WindowSize: model.BoundWindowSizeFloat64(float64(model.WindowSize())),
-		Candles:    model.BoundCandlesFloat64(float64(model.Candles())),
-		StopLoss:   model.BoundStopLoss(model.StopLoss()),
-		TakeProfit: model.BoundTakeProfit(model.TakeProfit()),
+		BatchSizeLog2:       model.BoundBatchSizeLog2Float64(math.Log2(float64(model.BatchSize()))),
+		HiddenLayerSizeLog2: model.BoundHiddenLayerSizeLog2Float64(math.Log2(float64(model.HiddenLayerSize()))),
+		WindowSize:          model.BoundWindowSizeFloat64(float64(model.WindowSize())),
+		Candles:             model.BoundCandlesFloat64(float64(model.Candles())),
+		StopLoss:            model.BoundStopLoss(model.StopLoss()),
+		TakeProfit:          model.BoundTakeProfit(model.TakeProfit()),
 
 		Cooldown: model.BoundCooldownFloat64(float64(model.Cooldown().Seconds())),
 
@@ -161,6 +165,8 @@ func randomizeStrategy(s *Strategy, percent float64) {
 	s.RSILowerBound = model.BoundRSILowerBound(s.RSILowerBound * randPercent(percent))
 	s.RSISlope = model.BoundRSISlopeFloat64(s.RSISlope * randPercent(percent))
 
+	s.BatchSizeLog2 = model.BoundBatchSizeLog2Float64(s.BatchSizeLog2 * randPercent(percent))
+	s.HiddenLayerSizeLog2 = model.BoundHiddenLayerSizeLog2Float64(s.HiddenLayerSizeLog2 * randPercent(percent))
 	s.L2Penalty = model.BoundL2Penalty(s.L2Penalty * randPercent(percent))
 	s.DropoutRate = model.BoundDropoutRate(s.DropoutRate * randPercent(percent))
 	s.LearnRate = model.BoundLearnRate(s.LearnRate * randPercent(percent))
@@ -174,6 +180,13 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		TradeMultiplier: model.TradeMultiplier(),
 		Commission:      model.Commission(),
 		Cooldown:        time.Duration(s.Cooldown * float64(time.Second)),
+
+		BatchSize:       int(math.Pow(2, float64(int(s.BatchSizeLog2)))),
+		HiddenLayerSize: int(math.Pow(2, float64(int(s.HiddenLayerSizeLog2)))),
+		L2Penalty:       s.L2Penalty,
+		DropoutRate:     s.DropoutRate,
+		LearnRate:       s.LearnRate,
+		TrainDays:       time.Duration(s.TrainDays * float64(time.Hour) * 24),
 
 		WindowSize: int(s.WindowSize),
 		Candles:    int(s.Candles),
@@ -210,14 +223,6 @@ func StrategyToParams(s Strategy) model.ModelParams {
 		RSIUpperBound:              s.RSIUpperBound,
 		RSILowerBound:              s.RSILowerBound,
 		RSISlope:                   int(s.RSISlope),
-
-		L2Penalty:   s.L2Penalty,
-		DropoutRate: s.DropoutRate,
-		LearnRate:   s.LearnRate,
-		TrainDays:   time.Duration(s.TrainDays * float64(time.Hour) * 24),
-
-		BatchSize:       model.BatchSize(),
-		HiddenLayerSize: model.HiddenLayerSize(),
 	}
 }
 
@@ -290,6 +295,13 @@ func crossover(parent1, parent2 Strategy) Strategy {
 	return Strategy{
 		Instrument: parent1.Instrument,
 
+		BatchSizeLog2:       selectValue(parent1.BatchSizeLog2, parent2.BatchSizeLog2),
+		HiddenLayerSizeLog2: selectValue(parent1.HiddenLayerSizeLog2, parent2.HiddenLayerSizeLog2),
+		L2Penalty:           selectValue(parent1.L2Penalty, parent2.L2Penalty),
+		DropoutRate:         selectValue(parent1.DropoutRate, parent2.DropoutRate),
+		LearnRate:           selectValue(parent1.LearnRate, parent2.LearnRate),
+		TrainDays:           selectValue(parent1.TrainDays, parent2.TrainDays),
+
 		WindowSize: selectValue(parent1.WindowSize, parent2.WindowSize),
 		Candles:    selectValue(parent1.Candles, parent2.Candles),
 		TakeProfit: selectValue(parent1.TakeProfit, parent2.TakeProfit),
@@ -327,11 +339,6 @@ func crossover(parent1, parent2 Strategy) Strategy {
 		RSIUpperBound:              selectValue(parent1.RSIUpperBound, parent2.RSIUpperBound),
 		RSILowerBound:              selectValue(parent1.RSILowerBound, parent2.RSILowerBound),
 		RSISlope:                   selectValue(parent1.RSISlope, parent2.RSISlope),
-
-		L2Penalty:   selectValue(parent1.L2Penalty, parent2.L2Penalty),
-		DropoutRate: selectValue(parent1.DropoutRate, parent2.DropoutRate),
-		LearnRate:   selectValue(parent1.LearnRate, parent2.LearnRate),
-		TrainDays:   selectValue(parent1.TrainDays, parent2.TrainDays),
 	}
 }
 
