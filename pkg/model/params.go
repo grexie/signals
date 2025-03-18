@@ -133,7 +133,7 @@ func (m *ModelParams) Write(w io.Writer, title string, tradeInfo bool) {
 		t.SetTitle("Trade Info")
 		t.AppendRows([]table.Row{
 			{"Take Profit", fmt.Sprintf("%0.02f%%", (100*m.TakeProfit*m.Leverage)/m.TradeMultiplier)},
-			{"Stop Loss", fmt.Sprintf("%0.02f%%", (100 * m.StopLoss * m.TradeMultiplier))},
+			{"Stop Loss", fmt.Sprintf("%0.02f%%", (100 * m.StopLoss * m.Leverage * m.TradeMultiplier))},
 			{"Leverage", fmt.Sprintf("%0.0f", m.Leverage)},
 		})
 		t.AppendSeparator()
