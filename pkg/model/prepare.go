@@ -324,6 +324,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 				rsiSlope > 0 &&
 				macd[i] > macdSignal[i] {
 				label = StrategyLong
+				break
 			} else if potentialLoss >= params.TakeProfit &&
 				potentialGain < params.StopLoss &&
 				actualChange < 0 &&
@@ -331,6 +332,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 				rsiSlope < 0 &&
 				macd[i] < macdSignal[i] {
 				label = StrategyShort
+				break
 			}
 		}
 
