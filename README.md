@@ -52,6 +52,16 @@ SIGNALS_OPTIMIZER_MUTATION_RATE=0.25
 SIGNALS_OPTIMIZER_ELITE_COUNT=5
 ```
 
+### Binance Candlestick Data
+
+By default Signals will use OKX candlestick data. To switch to Binance
+candlestick data use the following in your env file:
+
+```ini
+SIGNALS_NETWORK=binance
+SIGNALS_INSTRUMENT=DOGEUSDT
+```
+
 ## Usage
 
 ### Running the Optimizer

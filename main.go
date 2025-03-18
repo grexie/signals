@@ -107,7 +107,7 @@ func main() {
 	notBefore := time.Time{}
 
 	now := time.Now()
-	if _, err := candles.GetCandles(db, pw, instrument, candles.OKX, now.AddDate(-1, 0, 0), now); err != nil {
+	if _, err := candles.GetCandles(db, pw, instrument, candles.Network(model.Network()), now.AddDate(-1, 0, 0), now); err != nil {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 
@@ -239,7 +239,7 @@ func Optimize(db *leveldb.DB, instrument string) {
 	pw.Style().Options.PercentFormat = "%2.0f%%"
 	go pw.Render()
 
-	if _, err := candles.GetCandles(db, pw, instrument, candles.OKX, now.AddDate(-1, 0, 0), now); err != nil {
+	if _, err := candles.GetCandles(db, pw, instrument, candles.Network(model.Network()), now.AddDate(-1, 0, 0), now); err != nil {
 		log.Fatalf("error fetching candles: %v", err)
 	}
 

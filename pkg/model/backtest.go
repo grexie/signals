@@ -24,7 +24,7 @@ func (m *Model) CalculateCandlesForBacktest(params ModelParams, start time.Time,
 }
 
 func (m *Model) Backtest(pw progress.Writer, iterate func(), instrument string, params ModelParams, start time.Time, end time.Time) (BacktestMetrics, error) {
-	candles, err := candles.GetCandles(m.db, pw, instrument, candles.OKX, start.Add(-time.Duration(params.WindowSize)*time.Minute), end)
+	candles, err := candles.GetCandles(m.db, pw, instrument, candles.Network(Network()), start.Add(-time.Duration(params.WindowSize)*time.Minute), end)
 	if err != nil {
 		return BacktestMetrics{}, err
 	}

@@ -24,7 +24,7 @@ func NewModel(ctx context.Context, pw progress.Writer, db *leveldb.DB, instrumen
 	to := now
 	from := to.Add(-params.TrainDays)
 
-	candles, err := candles.GetCandles(db, nil, instrument, candles.OKX, from, to)
+	candles, err := candles.GetCandles(db, nil, instrument, candles.Network(Network()), from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ type Prediction map[Strategy]float64
 func (m *Model) Predict(pw progress.Writer, feature []float64, now time.Time) ([]float64, Prediction, error) {
 	if feature == nil {
 		from := now.Truncate(time.Minute).Add(-time.Duration(WindowSize()*2) * time.Minute)
-		candles, err := candles.GetCandles(m.db, pw, m.Instrument, candles.OKX, from, now)
+		candles, err := candles.GetCandles(m.db, pw, m.Instrument, candles.Network(Network()), from, now)
 		if err != nil {
 			return nil, nil, err
 		}

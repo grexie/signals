@@ -144,6 +144,40 @@ func fetchMissingCandles(db *leveldb.DB, pw progress.Writer, instrument string, 
 				tracker.MarkAsDone()
 			}
 		}()
+	case Binance:
+		binanceFetcherInitOnce.Do(func() {
+			startBinanceFetcher(db)
+		})
+
+		go func() {
+			defer close(out)
+
+			channels := make([]chan candleResponse, len(missingIntervals))
+
+			for i, interval := range missingIntervals {
+				channels[i] = make(chan candleResponse, 1500)
+
+				binanceFetchQueue <- candleRequest{
+					Instrument: instrument,
+					Start:      interval.start,
+					End:        interval.end,
+					Response:   channels[i],
+				}
+			}
+
+			for _, ch := range channels {
+				for candleResponse := range ch {
+					out <- candleResponse
+					if tracker != nil {
+						tracker.Increment(1)
+					}
+				}
+			}
+
+			if tracker != nil {
+				tracker.MarkAsDone()
+			}
+		}()
 	}
 
 	return out

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grexie/signals/pkg/candles"
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
@@ -269,6 +270,7 @@ func envDays(name string, def func() time.Duration, dec func(v time.Duration) ti
 }
 
 var (
+	Network    = envString("SIGNALS_NETWORK", func() string { return string(candles.OKX) })
 	Instrument = envString("SIGNALS_INSTRUMENT", func() string { return "DOGE-USDT-SWAP" })
 	Cooldown   = envDuration("SIGNALS_COOLDOWN", func() time.Duration { return 5 * time.Minute }, BoundCooldown)
 )
