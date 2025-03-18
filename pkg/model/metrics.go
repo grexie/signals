@@ -72,6 +72,10 @@ func (m *ModelMetrics) Fitness() float64 {
 	// ✅ Ensure smooth scaling by adding a small **positive offset**
 	fitness = safeValue(fitness+0.00001, 0.00001)
 
+	if m.Backtest.Max.Trades == 0 {
+		fitness = 0
+	}
+
 	return fitness
 }
 
