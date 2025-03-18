@@ -97,6 +97,11 @@ type BalancesResponse struct {
 }
 
 func GetEquity(ctx context.Context) (float64, error) {
+	currency := "USDT"
+	if c, ok := os.LookupEnv("SIGNALS_CURRENCY"); ok {
+		currency = c
+	}
+
 	client := resty.New()
 
 	url := OKX_BASE_URL() + "/api/v5/account/balance"
@@ -127,8 +132,12 @@ func GetEquity(ctx context.Context) (float64, error) {
 		return 0, fmt.Errorf("error getting equity: %s", res.Msg)
 	}
 
+	if len(res.Data) == 0 {
+		return 0, fmt.Errorf("get equity returned no data")
+	}
+
 	for _, details := range res.Data[0].Details {
-		if details.Currency == "USDT" {
+		if details.Currency == currency {
 			// Convert string to float
 			var equity float64
 			fmt.Sscanf(details.Equity, "%f", &equity)
