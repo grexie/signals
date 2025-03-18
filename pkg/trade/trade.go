@@ -123,6 +123,10 @@ func GetEquity(ctx context.Context) (float64, error) {
 		return 0, err
 	}
 
+	if res.Code != "0" {
+		return 0, fmt.Errorf("error getting equity: %s", res.Msg)
+	}
+
 	for _, details := range res.Data[0].Details {
 		if details.Currency == "USDT" {
 			// Convert string to float
