@@ -39,6 +39,8 @@ func WriteCSVHeader(writer *csv.Writer) error {
 
 		"Train Days (Mean)", "Train Days (25th Percentile)", "Train Days (Median)", "Train Days (75th Percentile)", "Train Days (95th Percentile)", "Train Days (Min)", "Train Days (Max)", "Train Days (StdDev)",
 
+		"F1 Score (Mean)", "F1 Score (25th Percentile)", "F1 Score (Median)", "F1 Score (75th Percentile)", "F1 Score (95th Percentile)", "F1 Score (Min)", "F1 Score (Max)", "F1 Score (StdDev)",
+
 		"Fitness (Best Strategy)",
 
 		"Accuracy (Best Strategy)",
@@ -111,7 +113,7 @@ func WriteCSVHeader(writer *csv.Writer) error {
 	}
 }
 
-func WriteCSVRow(writer *csv.Writer, generation int, started time.Time, ended time.Time, fitnesses []float64, pnls []float64, maxDrawdowns []float64, sharpes []float64, sortinos []float64, trades []float64, trainDays []float64, params model.ModelParams, s *Strategy) error {
+func WriteCSVRow(writer *csv.Writer, generation int, started time.Time, ended time.Time, fitnesses []float64, pnls []float64, maxDrawdowns []float64, sharpes []float64, sortinos []float64, trades []float64, trainDays []float64, f1Scores []float64, params model.ModelParams, s *Strategy) error {
 	row := []string{
 		fmt.Sprintf("%d", generation),
 
@@ -127,7 +129,10 @@ func WriteCSVRow(writer *csv.Writer, generation int, started time.Time, ended ti
 
 		fmt.Sprintf("%0.2f", stat.Mean(trainDays, nil)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 25)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 50)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 75)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 95)), fmt.Sprintf("%0.2f", minFloats(trainDays)), fmt.Sprintf("%0.2f", maxFloats(trainDays)), fmt.Sprintf("%0.6f", stat.StdDev(trainDays, nil)),
 
+		fmt.Sprintf("%0.2f%%", stat.Mean(f1Scores, nil)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 25)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 50)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 75)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 95)), fmt.Sprintf("%0.2f%%", minFloats(f1Scores)), fmt.Sprintf("%0.2f%%", maxFloats(f1Scores)), fmt.Sprintf("%0.6f", stat.StdDev(f1Scores, nil)),
+
 		fmt.Sprintf("%.6f", s.ModelMetrics.Fitness()),
+
 		fmt.Sprintf("%0.02f%%", s.ModelMetrics.Accuracy),
 		fmt.Sprintf("%0.2f%%", (s.ModelMetrics.ClassPrecision[0]+s.ModelMetrics.ClassPrecision[1]+s.ModelMetrics.ClassPrecision[2])/3),
 		fmt.Sprintf("%0.2f%%", (s.ModelMetrics.ClassRecall[0]+s.ModelMetrics.ClassRecall[1]+s.ModelMetrics.ClassRecall[2])/3),

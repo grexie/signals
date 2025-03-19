@@ -467,6 +467,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		sortinos := []float64{}
 		trades := []float64{}
 		trainDays := []float64{}
+		f1Scores := []float64{}
 		newPopulation := make([]Strategy, 0, popSize)
 		for s := range results {
 			newPopulation = append(newPopulation, s)
@@ -477,6 +478,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			sortinos = append(sortinos, s.ModelMetrics.Backtest.Mean.SortinoRatio)
 			trades = append(trades, s.ModelMetrics.Backtest.Mean.Trades)
 			trainDays = append(trainDays, s.TrainDays)
+			f1Scores = append(f1Scores, (s.ModelMetrics.F1Scores[0]+s.ModelMetrics.F1Scores[1]+s.ModelMetrics.F1Scores[2])/3)
 		}
 
 		tracker.MarkAsDone()
@@ -521,6 +523,10 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		t.AppendSeparator()
 		t.AppendRows([]table.Row{
 			{"Train Days", fmt.Sprintf("%0.2f", stat.Mean(trainDays, nil)), fmt.Sprintf("%0.2f", minFloats(trainDays)), fmt.Sprintf("%0.2f", maxFloats(trainDays)), fmt.Sprintf("%0.6f", stat.StdDev(trainDays, nil))},
+		})
+		t.AppendSeparator()
+		t.AppendRows([]table.Row{
+			{"F1 Score", fmt.Sprintf("%0.2f%%", stat.Mean(f1Scores, nil)), fmt.Sprintf("%0.2f%%", minFloats(f1Scores)), fmt.Sprintf("%0.2f%%", maxFloats(f1Scores)), fmt.Sprintf("%0.6f", stat.StdDev(f1Scores, nil))},
 		})
 		t.Render()
 
