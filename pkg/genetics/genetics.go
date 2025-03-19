@@ -534,7 +534,7 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		params.Write(os.Stdout, fmt.Sprintf("Generation %d - Best Strategy", gen), false)
 		strategy.ModelMetrics.Write(os.Stdout)
 
-		if err := WriteCSVRow(writer, gen, started, time.Now(), fitnesses, pnls, maxDrawdowns, sharpes, sortinos, trades, trainDays, params, &strategy); err != nil {
+		if err := WriteCSVRow(writer, gen, started, time.Now(), fitnesses, pnls, maxDrawdowns, sharpes, sortinos, trades, trainDays, f1Scores, params, &strategy); err != nil {
 			log.Fatalf("error writing csv: %v", err)
 		}
 	}
