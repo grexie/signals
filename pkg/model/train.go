@@ -222,7 +222,7 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 			avgValidLoss := validLoss / float64(validBatches)
 
 			// Early stopping check
-			if epoch == 0 || avgValidLoss < bestLoss {
+			if avgValidLoss < bestLoss {
 				bestLoss = avgValidLoss
 				noImprovementCount = 0
 				// Save best weights
