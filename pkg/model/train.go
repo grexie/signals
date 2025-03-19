@@ -37,6 +37,9 @@ func Train(pw progress.Writer, params ModelParams, features [][]float64, labels 
 	// Create validation set (10%)
 	totalSamples := len(features)
 	validationSize := totalSamples / 10
+	if validationSize < batchSize {
+		validationSize = batchSize
+	}
 	trainSize := totalSamples - validationSize
 
 	// Shuffle indices
