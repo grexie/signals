@@ -286,33 +286,33 @@ func BoundTrainDaysFloat64(v float64) float64 {
 }
 
 func BoundBatchSize(v int) int {
-	return int(math.Max(16, math.Min(32768, float64(v))))
+	return int(math.Max(16, math.Min(2048, float64(v))))
 }
 
 func BoundBatchSizeFloat64(v float64) float64 {
-	return math.Max(16, math.Min(32768, v))
+	return math.Max(16, math.Min(2048, v))
 }
 
 func BoundHiddenLayerSize(v int) int {
-	return int(math.Max(8, math.Min(512, float64(v))))
+	return int(math.Max(8, math.Min(256, float64(v))))
 }
 
 func BoundHiddenLayerSizeFloat64(v float64) float64 {
-	return math.Max(8, math.Min(512, v))
+	return math.Max(8, math.Min(256, v))
 }
 
 func BoundBatchSizeLog2(v int) int {
-	return int(math.Max(4, math.Min(15, float64(v)))) // [log2(16), log2(32768)]
+	return int(math.Max(4, math.Min(11, float64(v)))) // [log2(16), log2(2048)]
 }
 
 func BoundBatchSizeLog2Float64(v float64) float64 {
-	return math.Max(4, math.Min(15, float64(v)))
+	return math.Max(4, math.Min(11, float64(v)))
 }
 
 func BoundHiddenLayerSizeLog2(v int) int {
-	return int(math.Max(3, math.Min(9, float64(v))))
+	return int(math.Max(3, math.Min(8, float64(v))))
 }
 
 func BoundHiddenLayerSizeLog2Float64(v float64) float64 {
-	return math.Max(3, math.Min(9, v))
+	return math.Max(3, math.Min(8, v))
 }
