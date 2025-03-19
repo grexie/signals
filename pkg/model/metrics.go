@@ -53,9 +53,9 @@ func (m *ModelMetrics) Fitness() float64 {
 	// PnL Reward Factor: Increases fitness for profitable models (range: ~0.8 to 1.5)
 	pnlReward := 0.8 + 0.7*math.Exp(safeValue(m.Backtest.Mean.PnL, 0)/100)
 
-	// Additional smoother exponential penalty for low trades (range: ~0.3 to 1.0)
+	// Additional smoother exponential penalty for low trades (range: ~0.2 to 1.0)
 	trades := safeValue(m.Backtest.Mean.Trades, 0)
-	tradePenalty := math.Exp(-3.0 / (trades + 1)) // k = 3.0 smooths low trade penalties
+	tradePenalty := math.Exp(-4.0 / (trades + 2)) // k = 4.0 smooths low trade penalties
 
 	// Base fitness calculation (weighted sum)
 	fitness := (avgF1 * 0.25) + (sortino * 0.25) + (sharpe * 0.2) + (normPnL * 0.3)
