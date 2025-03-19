@@ -511,22 +511,22 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.SetTitle(fmt.Sprintf("Generation %d - Summary", gen))
-		t.AppendHeader(table.Row{"", "MEAN", "MIN", "MAX", "STDDEV"})
+		t.AppendHeader(table.Row{"", "MEAN", "MIN", "25TH", "MEDIAN", "75TH", "MAX", "STDDEV"})
 		t.AppendRows([]table.Row{
-			{"Fitness", fmt.Sprintf("%0.6f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.6f", minFloats(fitnesses)), fmt.Sprintf("%0.6f", maxFloats(fitnesses)), fmt.Sprintf("%0.6f", stat.StdDev(fitnesses, nil))},
-			{"PnL", fmt.Sprintf("%0.2f%%", stat.Mean(pnls, nil)), fmt.Sprintf("%0.2f%%", minFloats(pnls)), fmt.Sprintf("%0.2f%%", maxFloats(pnls)), fmt.Sprintf("%0.6f", stat.StdDev(pnls, nil))},
-			{"Max Drawdown", fmt.Sprintf("%0.2f%%", stat.Mean(maxDrawdowns, nil)), fmt.Sprintf("%0.2f%%", minFloats(maxDrawdowns)), fmt.Sprintf("%0.2f%%", maxFloats(maxDrawdowns)), fmt.Sprintf("%0.6f", stat.StdDev(maxDrawdowns, nil))},
-			{"Sharpe Ratio", fmt.Sprintf("%0.2f", stat.Mean(sharpes, nil)), fmt.Sprintf("%0.2f", minFloats(sharpes)), fmt.Sprintf("%0.2f", maxFloats(sharpes)), fmt.Sprintf("%0.6f", stat.StdDev(sharpes, nil))},
-			{"Sortino Ratio", fmt.Sprintf("%0.2f", stat.Mean(sortinos, nil)), fmt.Sprintf("%0.2f", minFloats(sortinos)), fmt.Sprintf("%0.2f", maxFloats(sortinos)), fmt.Sprintf("%0.6f", stat.StdDev(sortinos, nil))},
-			{"Trades", fmt.Sprintf("%0.2f", stat.Mean(trades, nil)), fmt.Sprintf("%0.2f", minFloats(trades)), fmt.Sprintf("%0.2f", maxFloats(trades)), fmt.Sprintf("%0.6f", stat.StdDev(trades, nil))},
+			{"Fitness", fmt.Sprintf("%0.6f", stat.Mean(fitnesses, nil)), fmt.Sprintf("%0.6f", minFloats(fitnesses)), fmt.Sprintf("%0.6f", CalculatePercentile(fitnesses, 25)), fmt.Sprintf("%0.6f", CalculatePercentile(fitnesses, 50)), fmt.Sprintf("%0.6f", CalculatePercentile(fitnesses, 75)), fmt.Sprintf("%0.6f", maxFloats(fitnesses)), fmt.Sprintf("%0.6f", stat.StdDev(fitnesses, nil))},
+			{"PnL", fmt.Sprintf("%0.2f%%", stat.Mean(pnls, nil)), fmt.Sprintf("%0.2f%%", minFloats(pnls)), fmt.Sprintf("%0.2f%%", CalculatePercentile(pnls, 25)), fmt.Sprintf("%0.2f%%", CalculatePercentile(pnls, 50)), fmt.Sprintf("%0.2f%%", CalculatePercentile(pnls, 75)), fmt.Sprintf("%0.2f%%", maxFloats(pnls)), fmt.Sprintf("%0.6f", stat.StdDev(pnls, nil))},
+			{"Max Drawdown", fmt.Sprintf("%0.2f%%", stat.Mean(maxDrawdowns, nil)), fmt.Sprintf("%0.2f%%", minFloats(maxDrawdowns)), fmt.Sprintf("%0.2f%%", CalculatePercentile(maxDrawdowns, 25)), fmt.Sprintf("%0.2f%%", CalculatePercentile(maxDrawdowns, 50)), fmt.Sprintf("%0.2f%%", CalculatePercentile(maxDrawdowns, 75)), fmt.Sprintf("%0.2f%%", maxFloats(maxDrawdowns)), fmt.Sprintf("%0.6f", stat.StdDev(maxDrawdowns, nil))},
+			{"Sharpe Ratio", fmt.Sprintf("%0.2f", stat.Mean(sharpes, nil)), fmt.Sprintf("%0.2f", minFloats(sharpes)), fmt.Sprintf("%0.2f", CalculatePercentile(sharpes, 25)), fmt.Sprintf("%0.2f", CalculatePercentile(sharpes, 50)), fmt.Sprintf("%0.2f", CalculatePercentile(sharpes, 75)), fmt.Sprintf("%0.2f", maxFloats(sharpes)), fmt.Sprintf("%0.6f", stat.StdDev(sharpes, nil))},
+			{"Sortino Ratio", fmt.Sprintf("%0.2f", stat.Mean(sortinos, nil)), fmt.Sprintf("%0.2f", minFloats(sortinos)), fmt.Sprintf("%0.2f", CalculatePercentile(sortinos, 25)), fmt.Sprintf("%0.2f", CalculatePercentile(sortinos, 50)), fmt.Sprintf("%0.2f", CalculatePercentile(sortinos, 75)), fmt.Sprintf("%0.2f", maxFloats(sortinos)), fmt.Sprintf("%0.6f", stat.StdDev(sortinos, nil))},
+			{"Trades", fmt.Sprintf("%0.2f", stat.Mean(trades, nil)), fmt.Sprintf("%0.2f", minFloats(trades)), fmt.Sprintf("%0.2f", CalculatePercentile(trades, 25)), fmt.Sprintf("%0.2f", CalculatePercentile(trades, 50)), fmt.Sprintf("%0.2f", CalculatePercentile(trades, 75)), fmt.Sprintf("%0.2f", maxFloats(trades)), fmt.Sprintf("%0.6f", stat.StdDev(trades, nil))},
 		})
 		t.AppendSeparator()
 		t.AppendRows([]table.Row{
-			{"Train Days", fmt.Sprintf("%0.2f", stat.Mean(trainDays, nil)), fmt.Sprintf("%0.2f", minFloats(trainDays)), fmt.Sprintf("%0.2f", maxFloats(trainDays)), fmt.Sprintf("%0.6f", stat.StdDev(trainDays, nil))},
+			{"Train Days", fmt.Sprintf("%0.2f", stat.Mean(trainDays, nil)), fmt.Sprintf("%0.2f", minFloats(trainDays)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 25)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 50)), fmt.Sprintf("%0.2f", CalculatePercentile(trainDays, 75)), fmt.Sprintf("%0.2f", maxFloats(trainDays)), fmt.Sprintf("%0.6f", stat.StdDev(trainDays, nil))},
 		})
 		t.AppendSeparator()
 		t.AppendRows([]table.Row{
-			{"F1 Score", fmt.Sprintf("%0.2f%%", stat.Mean(f1Scores, nil)), fmt.Sprintf("%0.2f%%", minFloats(f1Scores)), fmt.Sprintf("%0.2f%%", maxFloats(f1Scores)), fmt.Sprintf("%0.6f", stat.StdDev(f1Scores, nil))},
+			{"F1 Score", fmt.Sprintf("%0.2f%%", stat.Mean(f1Scores, nil)), fmt.Sprintf("%0.2f%%", minFloats(f1Scores)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 25)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 50)), fmt.Sprintf("%0.2f%%", CalculatePercentile(f1Scores, 75)), fmt.Sprintf("%0.2f%%", maxFloats(f1Scores)), fmt.Sprintf("%0.6f", stat.StdDev(f1Scores, nil))},
 		})
 		t.Render()
 
