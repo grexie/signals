@@ -36,8 +36,9 @@ func (m *ModelMetrics) Fitness() float64 {
 	sharpe := 0.5 + 0.5*math.Tanh(safeValue(m.Backtest.Mean.SharpeRatio, 0)/3)
 	sortino := 0.5 + 0.5*math.Tanh(safeValue(m.Backtest.Mean.SortinoRatio, 0)/3)
 
-	// Drawdown penalty (range: ~0.1 to 1.0)
-	drawdownPenalty := 0.1 + 0.9*math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0)/25)
+	// Drawdown penalty (range: ~0.05 to 1.0)
+	drawdownPenalty := (0.1 + 0.9*math.Exp(-safeValue(m.Backtest.Min.MaxDrawdown, 0)/25)) *
+		math.Exp(-4.0*(1.0-(m.Backtest.Min.MaxDrawdown/100.0)))
 
 	// Variance penalty (range: ~0.2 to 1.0)
 	variancePenalty := 1.0 / (1.0 + safeValue(m.Backtest.StdDev.PnL, 0)/10)
@@ -52,6 +53,10 @@ func (m *ModelMetrics) Fitness() float64 {
 	// PnL Reward Factor: Increases fitness for profitable models (range: ~0.8 to 1.5)
 	pnlReward := 0.8 + 0.7*math.Exp(safeValue(m.Backtest.Mean.PnL, 0)/100)
 
+	// Additional smoother exponential penalty for low trades (range: ~0.3 to 1.0)
+	trades := safeValue(m.Backtest.Max.Trades, 0)
+	tradePenalty := math.Exp(-3.0 / (trades + 1)) // k = 3.0 smooths low trade penalties
+
 	// Base fitness calculation (weighted sum)
 	fitness := (avgF1 * 0.25) + (sortino * 0.25) + (sharpe * 0.2) + (normPnL * 0.3)
 
@@ -61,22 +66,9 @@ func (m *ModelMetrics) Fitness() float64 {
 	fitness *= variancePenalty
 	fitness *= riskRewardFactor
 	fitness *= pnlReward
+	fitness *= tradePenalty
 
-	// Extreme penalty for full account wipeouts (range: 0.05 to 1.0)
-	if m.Backtest.Min.MaxDrawdown >= 99.5 {
-		fitness *= 0.05
-	} else if m.Backtest.Min.MaxDrawdown >= 95 {
-		fitness *= 0.2
-	}
-
-	// ✅ Ensure smooth scaling by adding a small **positive offset**
-	fitness = safeValue(fitness+0.00001, 0.00001)
-
-	if m.Backtest.Max.Trades < 1 {
-		fitness = 0
-	}
-
-	return fitness
+	return safeValue(fitness, 0)
 }
 
 func (m ModelMetrics) Write(w io.Writer) error {
