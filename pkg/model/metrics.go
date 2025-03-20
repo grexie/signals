@@ -44,8 +44,8 @@ func (m *ModelMetrics) Fitness() float64 {
 	variancePenalty := 1.0 / (1.0 + safeValue(m.Backtest.StdDev.PnL, 0)/10)
 
 	// Trade Factor: Rewarding both mean and min trade counts (range: ~0.2 to 1.5)
-	tradeFactor := 0.2 + 0.7*math.Tanh(safeValue(m.Backtest.Mean.Trades, 0)*0.1) +
-		0.6*math.Tanh(safeValue(m.Backtest.Min.Trades, 0)*0.2)
+	//tradeFactor := 0.2 + 0.7*math.Tanh(safeValue(m.Backtest.Mean.Trades, 0)*0.1) +
+	//	0.6*math.Tanh(safeValue(m.Backtest.Min.Trades, 0)*0.2)
 
 	// Risk-Adjusted Return Modifier: Penalizing strategies with very low trades (range: ~0.6 to 1.2)
 	riskRewardFactor := 0.6 + 0.6*math.Tanh((safeValue(m.Backtest.Mean.PnL, 0)/math.Max(safeValue(m.Backtest.Mean.Trades, 1), 1))*0.05)
@@ -62,7 +62,7 @@ func (m *ModelMetrics) Fitness() float64 {
 
 	// Apply smooth multipliers
 	fitness *= drawdownPenalty
-	fitness *= tradeFactor
+	//fitness *= tradeFactor
 	fitness *= variancePenalty
 	fitness *= riskRewardFactor
 	fitness *= pnlReward
