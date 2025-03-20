@@ -136,6 +136,9 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			return newPopulation[i].ModelMetrics.Fitness() > newPopulation[j].ModelMetrics.Fitness()
 		})
 
+		// Best strategy of this generation
+		strategy := newPopulation[0]
+
 		// Apply selection
 		population = selection(newPopulation, retainRate, eliteCount)
 
@@ -147,9 +150,6 @@ func NaturalSelection(db *leveldb.DB, instrument string, now time.Time, popSize,
 			mutate(&child, mutationRate)
 			population = append(population, child)
 		}
-
-		// Best strategy of this generation
-		strategy := population[0]
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
