@@ -225,7 +225,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 	for i := params.WindowSize; i < len(candles)-params.Candles; i++ {
 		tracker.Increment(1)
 
-		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
+		rsiSlope := (rsi14[i]-rsi14[i-params.RSISlope])/float64(100*params.RSISlope) + 0.5
 
 		// Base features
 		currentFeatures := []float64{
@@ -320,17 +320,17 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 			if potentialGain >= params.TakeProfit &&
 				potentialLoss < params.StopLoss &&
 				actualChange > 0 &&
-				rsi14[i] > params.RSIUpperBound &&
-				rsiSlope > 0 &&
-				macd[i] > macdSignal[i] {
+				rsi14[i] < params.RSILowerBound &&
+				rsiSlope > 0.5 &&
+				macd[i] < macdSignal[i] {
 				label = StrategyLong
 				break
 			} else if potentialLoss >= params.TakeProfit &&
 				potentialGain < params.StopLoss &&
 				actualChange < 0 &&
-				rsi14[i] < params.RSILowerBound &&
-				rsiSlope < 0 &&
-				macd[i] < macdSignal[i] {
+				rsi14[i] > params.RSIUpperBound &&
+				rsiSlope < 0.5 &&
+				macd[i] > macdSignal[i] {
 				label = StrategyShort
 				break
 			}
