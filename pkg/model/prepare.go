@@ -67,7 +67,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
 	// Feature extraction with sliding window
 	for i := params.WindowSize; i < len(candles); i++ {
 
-		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
+		rsiSlope := (rsi14[i]-rsi14[i-params.RSISlope])/float64(100*params.RSISlope) + 0.5
 		divergence := ta.Divergence(candles, macd, i, 20)
 
 		// Base features
@@ -77,7 +77,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
 			normalizeValue(ma200[i], ma200[i-params.WindowSize:i+1]),
 			rsi14[i] / 100.0,
 			rsi5[i] / 100.0, // Added short-term RSI
-			rsiSlope / 100.0,
+			rsiSlope,
 			normalizeValue(macd[i], macd[i-params.WindowSize:i+1]),
 			normalizeValue(macdSignal[i], macdSignal[i-params.WindowSize:i+1]),
 			normalizeValue(macdFast[i], macdFast[i-params.WindowSize:i+1]),
