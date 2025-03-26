@@ -7,7 +7,7 @@ type DivergenceStrategy int
 const (
 	DivergenceSideways DivergenceStrategy = 0
 	DivergenceBullish  DivergenceStrategy = 1
-	DivergenceBearish  DivergenceStrategy = 2
+	DivergenceBearish  DivergenceStrategy = -1
 )
 
 func Divergence(candles []candles.Candle, macd []float64, i int, window int) DivergenceStrategy {

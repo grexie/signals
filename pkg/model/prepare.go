@@ -68,6 +68,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
 	for i := params.WindowSize; i < len(candles); i++ {
 
 		rsiSlope := (rsi14[i] - rsi14[i-params.RSISlope]) / float64(params.RSISlope)
+		divergence := ta.Divergence(candles, macd, i, 20)
 
 		// Base features
 		currentFeatures := []float64{
@@ -82,6 +83,7 @@ func PrepareForPrediction(candles []Candle, params ModelParams) [][]float64 {
 			normalizeValue(macdFast[i], macdFast[i-params.WindowSize:i+1]),
 			normalizeValue(macdFastSignal[i], macdFastSignal[i-params.WindowSize:i+1]),
 			normalizeValue(ma20[i], ma20[i-params.WindowSize:i+1]),
+			float64(divergence)/2.0 + 0.5,
 			normalizeValue(bbUpper[i], bbUpper[i-params.WindowSize:i+1]),
 			normalizeValue(bbLower[i], bbLower[i-params.WindowSize:i+1]),
 			stochK[i] / 100.0,
@@ -226,6 +228,7 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		tracker.Increment(1)
 
 		rsiSlope := (rsi14[i]-rsi14[i-params.RSISlope])/float64(100*params.RSISlope) + 0.5
+		divergence := ta.Divergence(candles, macd, i, 20)
 
 		// Base features
 		currentFeatures := []float64{
@@ -234,12 +237,13 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 			normalizeValue(ma200[i], ma200[i-params.WindowSize:i+1]),
 			rsi14[i] / 100.0,
 			rsi5[i] / 100.0, // Added short-term RSI
-			rsiSlope / 100.0,
+			rsiSlope,
 			normalizeValue(macd[i], macd[i-params.WindowSize:i+1]),
 			normalizeValue(macdSignal[i], macdSignal[i-params.WindowSize:i+1]),
 			normalizeValue(macdFast[i], macdFast[i-params.WindowSize:i+1]),
 			normalizeValue(macdFastSignal[i], macdFastSignal[i-params.WindowSize:i+1]),
 			normalizeValue(ma20[i], ma20[i-params.WindowSize:i+1]),
+			float64(divergence)/2.0 + 0.5,
 			normalizeValue(bbUpper[i], bbUpper[i-params.WindowSize:i+1]),
 			normalizeValue(bbLower[i], bbLower[i-params.WindowSize:i+1]),
 			stochK[i] / 100.0,
@@ -307,8 +311,6 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		highestHigh := basePrice
 		lowestLow := basePrice
 		closingPrice := candles[i+params.Candles].Close
-
-		divergence := ta.Divergence(candles, macd, i, 20)
 
 		for j := 1; j <= params.Candles; j++ {
 			highestHigh = math.Max(highestHigh, candles[i+j].High)
