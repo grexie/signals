@@ -308,6 +308,8 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 		lowestLow := basePrice
 		closingPrice := candles[i+params.Candles].Close
 
+		divergence := ta.Divergence(candles, macd, i, 20)
+
 		for j := 1; j <= params.Candles; j++ {
 			highestHigh = math.Max(highestHigh, candles[i+j].High)
 			lowestLow = math.Min(lowestLow, candles[i+j].Low)
@@ -321,16 +323,18 @@ func Prepare(pw progress.Writer, candles []Candle, params ModelParams) ([][]floa
 				potentialLoss < params.StopLoss &&
 				actualChange > 0 &&
 				rsi14[i] < params.RSILowerBound &&
-				rsiSlope > 0.5 &&
-				macd[i] > macdSignal[i] {
+				rsiSlope > 0.45 &&
+				macd[i] > macdSignal[i] &&
+				divergence == ta.DivergenceBullish {
 				label = StrategyLong
 				break
 			} else if potentialLoss >= params.TakeProfit &&
 				potentialGain < params.StopLoss &&
 				actualChange < 0 &&
 				rsi14[i] > params.RSIUpperBound &&
-				rsiSlope < 0.5 &&
-				macd[i] < macdSignal[i] {
+				rsiSlope < 0.55 &&
+				macd[i] < macdSignal[i] &&
+				divergence == ta.DivergenceBearish {
 				label = StrategyShort
 				break
 			}
